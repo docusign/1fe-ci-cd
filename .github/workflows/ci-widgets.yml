@@ -1,0 +1,31 @@
+# File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
+name: Reusable Minimal Widget CI
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '18'
+
+jobs:
+  checkout_and_install:
+    name: Checkout and Install Dependencies
+    runs-on: ubuntu-latest # Using a GitHub-hosted runner
+
+    steps:
+      - name: Checkout Caller's Code
+        uses: actions/checkout@v4
+        # This action, when used in a reusable workflow triggered by workflow_call,
+        # automatically checks out the code of the repository that called the workflow.
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'yarn' # Enable caching for yarn dependencies
+
+      - name: Install Dependencies
+        run: yarn install --frozen-lockfile
