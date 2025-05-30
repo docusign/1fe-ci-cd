@@ -17,25 +17,6 @@ on:
         description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
         required: true
 
-# # File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
-name: Reusable Minimal Widget CI
-
-on:
-  workflow_call:
-    inputs:
-      node-version:
-        description: 'Node.js version to use'
-        required: false
-        type: string
-        default: '18'
-    secrets:
-      PRIVATE_KEY_FOR_1FE:
-        description: 'SSH private key for accessing docusign/1fe repository'
-        required: true
-      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
-        description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
-        required: true
-
 jobs:
   checkout_and_install:
     name: Checkout and Install Dependencies
