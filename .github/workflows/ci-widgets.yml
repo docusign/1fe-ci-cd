@@ -59,6 +59,4 @@ jobs:
           cache: 'yarn'
 
       - name: Install Dependencies
-        run: |
-          echo "INFO: Attempting to install dependencies with Yarn..."
-          yarn install --immutable --verbose
+        run: yarn install --frozen-lockfile
