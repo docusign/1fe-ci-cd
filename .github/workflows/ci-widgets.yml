@@ -17,6 +17,25 @@ on:
         description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
         required: true
 
+# # File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
+name: Reusable Minimal Widget CI
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        type: string
+        default: '18'
+    secrets:
+      PRIVATE_KEY_FOR_1FE:
+        description: 'SSH private key for accessing docusign/1fe repository'
+        required: true
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+        description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
+        required: true
+
 jobs:
   checkout_and_install:
     name: Checkout and Install Dependencies
@@ -26,15 +45,12 @@ jobs:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
 
-      - name: Set up SSH key for docusign/1fe
+      - name: Set up SSH keys for all dependencies
         uses: webfactory/ssh-agent@v0.9.1
         with:
-          ssh-private-key: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-
-      - name: Set up SSH key for 1fe-sample-widget-base-config
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+          ssh-private-key: | # Use YAML multi-line string to concatenate keys
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
       - name: Add github.com to known_hosts and configure Git URL rewrites
         run: |
@@ -50,7 +66,7 @@ jobs:
           echo "INFO: Git global config:"
           git config --global --list
           echo "INFO: SSH Agent status (keys loaded):"
-          ssh-add -l
+          ssh-add -l # Crucial: check if both keys are listed now
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -59,4 +75,7 @@ jobs:
           cache: 'yarn'
 
       - name: Install Dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          echo "INFO: Attempting to install dependencies with Yarn..."
+          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
+          yarn install --immutable --verbose
