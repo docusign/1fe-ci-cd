@@ -1,5 +1,6 @@
-# docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
+# File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
 name: Reusable Minimal Widget CI
+
 on:
   workflow_call:
     inputs:
@@ -7,17 +8,19 @@ on:
         description: 'Node.js version to use'
         required: false
         type: string
-        default: '22'
-    secrets: # Declare secrets expected from the caller
+        default: '18'
+    secrets:
       PRIVATE_KEY_FOR_1FE:
+        description: 'SSH private key for accessing docusign/1fe repository'
         required: true
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+        description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
         required: true
 
 jobs:
   checkout_and_install:
     name: Checkout and Install Dependencies
-    runs-on: ubuntu-latest # Using a GitHub-hosted runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Caller's Code
@@ -33,17 +36,29 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
-      - name: Force Git to use SSH for docusign GitHub URLs
+      - name: Add github.com to known_hosts and configure Git URL rewrites
         run: |
+          echo "INFO: Adding github.com to known_hosts"
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+          echo "INFO: Configuring Git URL rewrites..."
           git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
           git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
-          # Add more lines here if yarn tries to fetch other docusign private repos via https
+          
+          echo "INFO: Git global config:"
+          git config --global --list
+          echo "INFO: SSH Agent status (keys loaded):"
+          ssh-add -l
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-          cache: 'yarn' # Enable caching for yarn dependencies
+          cache: 'yarn'
 
       - name: Install Dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          echo "INFO: Attempting to install dependencies with Yarn..."
+          yarn install --immutable --verbose
