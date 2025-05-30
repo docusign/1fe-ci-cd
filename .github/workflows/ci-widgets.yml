@@ -8,7 +8,7 @@ on:
         description: 'Node.js version to use'
         required: false
         type: string
-        default: '18'
+        default: '22'
     secrets:
       PRIVATE_KEY_FOR_1FE:
         description: 'SSH private key for accessing docusign/1fe repository'
