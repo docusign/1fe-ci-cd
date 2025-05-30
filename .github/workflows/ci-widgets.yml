@@ -1,6 +1,5 @@
-# File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
+# docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
 name: Reusable Minimal Widget CI
-
 on:
   workflow_call:
     inputs:
@@ -8,7 +7,12 @@ on:
         description: 'Node.js version to use'
         required: false
         type: string
-        default: '18'
+        default: '22'
+    secrets: # Declare secrets expected from the caller
+      PRIVATE_KEY_FOR_1FE:
+        required: true
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+        required: true
 
 jobs:
   checkout_and_install:
@@ -18,8 +22,22 @@ jobs:
     steps:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
-        # This action, when used in a reusable workflow triggered by workflow_call,
-        # automatically checks out the code of the repository that called the workflow.
+
+      - name: Set up SSH key for docusign/1fe
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+
+      - name: Set up SSH key for 1fe-sample-widget-base-config
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+      - name: Force Git to use SSH for docusign GitHub URLs
+        run: |
+          git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
+          git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
+          # Add more lines here if yarn tries to fetch other docusign private repos via https
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
