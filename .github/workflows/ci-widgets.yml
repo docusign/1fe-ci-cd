@@ -1,5 +1,6 @@
 # File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
 name: Reusable Minimal Widget CI
+
 on:
   workflow_call:
     inputs:
@@ -11,15 +12,16 @@ on:
     secrets:
       PRIVATE_KEY_FOR_1FE:
         description: 'SSH private key for accessing docusign/1fe repository'
-        required: true # Still required because package.json now uses SSH
+        required: true
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
         description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
-        required: true # Still required
+        required: true
 
 jobs:
   checkout_and_install:
     name: Checkout and Install Dependencies
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
@@ -27,25 +29,25 @@ jobs:
       - name: Set up SSH keys for all dependencies
         uses: webfactory/ssh-agent@v0.9.1
         with:
-          ssh-private-key: |
+          ssh-private-key: | # Use YAML multi-line string to concatenate keys
             ${{ secrets.PRIVATE_KEY_FOR_1FE }}
             ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
-      - name: Add github.com to known_hosts
+      - name: Add github.com to known_hosts and configure Git URL rewrites
         run: |
+          echo "INFO: Adding github.com to known_hosts"
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
-          echo "INFO: SSH Agent status (keys loaded):"
-          ssh-add -l
 
-      # Optional: Keep for other git operations, but Yarn should use SSH directly now
-      - name: Configure Git URL rewrites (optional fallback)
-        run: |
+          echo "INFO: Configuring Git URL rewrites..."
           git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
           git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
+          
           echo "INFO: Git global config:"
           git config --global --list
+          echo "INFO: SSH Agent status (keys loaded):"
+          ssh-add -l # Crucial: check if both keys are listed now
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -54,8 +56,7 @@ jobs:
           cache: 'yarn'
 
       - name: Install Dependencies
-        env:
-          GIT_TERMINAL_PROMPT: 0
         run: |
           echo "INFO: Attempting to install dependencies with Yarn..."
+          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
           yarn install --immutable
