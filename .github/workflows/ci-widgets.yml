@@ -8,12 +8,12 @@ on:
         description: 'Node.js version to use'
         required: false
         type: string
-        default: '22'
+        default: '22' 
     secrets:
       PRIVATE_KEY_FOR_1FE:
         description: 'SSH private key for accessing docusign/1fe repository'
         required: true
-      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: # This is the key we are testing
         description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
         required: true
 
@@ -26,37 +26,64 @@ jobs:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
 
-      - name: Set up SSH keys for all dependencies
+      # Isolate the key for 1fe-sample-widget-base-config for this test
+      - name: Set up SSH key ONLY for 1fe-sample-widget-base-config
         uses: webfactory/ssh-agent@v0.9.1
         with:
-          ssh-private-key: | # Use YAML multi-line string to concatenate keys
-            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+          ssh-private-key: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
-      - name: Add github.com to known_hosts and configure Git URL rewrites
+      - name: Add github.com to known_hosts
         run: |
           echo "INFO: Adding github.com to known_hosts"
           mkdir -p ~/.ssh
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
-
-          echo "INFO: Configuring Git URL rewrites..."
-          git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
-          git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
           
-          echo "INFO: Git global config:"
-          git config --global --list
-          echo "INFO: SSH Agent status (keys loaded):"
-          ssh-add -l # Crucial: check if both keys are listed now
+          echo "INFO: SSH Agent status (sample-widget-base-config key only):"
+          ssh-add -l
+
+      - name: DEBUG - Test SSH connection to 1fe-sample-widget-base-config
+        env:
+          # No GIT_SSH_COMMAND here initially, rely on ssh-agent
+          TARGET_REPO_SSH_URL: git@github.com:docusign/1fe-sample-widget-base-config.git
+        run: |
+          echo "Attempting to list remote heads for $TARGET_REPO_SSH_URL"
+          git ls-remote -h $TARGET_REPO_SSH_URL
+          if [ $? -eq 0 ]; then
+            echo "SUCCESS: git ls-remote for $TARGET_REPO_SSH_URL worked."
+          else
+            echo "FAILURE: git ls-remote for $TARGET_REPO_SSH_URL failed. Retrying with verbose SSH..."
+            GIT_SSH_COMMAND="ssh -vvv" git ls-remote -h $TARGET_REPO_SSH_URL
+            # As a further test, try connecting directly with ssh -T
+            echo "Attempting direct SSH test connection..."
+            ssh -T -o StrictHostKeyChecking=accept-new git@github.com || echo "ssh -T git@github.com also failed"
+            exit 1 # Force failure to see logs
+          fi
+          
+      # The rest of your original steps would come after this, 
+      # but we'll likely fail at the step above if there's still an issue.
+      # You'd re-add the step to load PRIVATE_KEY_FOR_1FE if the debug step passes.
+      # And re-add the git config url.insteadOf steps.
+
+      # - name: Set up SSH key for docusign/1fe (if debug passed, re-enable this)
+      #   uses: webfactory/ssh-agent@v0.9.1
+      #   with:
+      #     ssh-private-key: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+      
+      # - name: Configure Git URL rewrites (if debug passed, re-enable this)
+      #   run: |
+      #     echo "INFO: Configuring Git URL rewrites..."
+      #     git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
+      #     git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
+      #     # ... rest of the echos and ssh-add -l
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ inputs.node-version }}
+          node-version: ${{ inputs.node-version }} # Now '22'
           cache: 'yarn'
 
-      - name: Install Dependencies
+      - name: Install Dependencies (WILL LIKELY FAIL HERE IF DEBUG STEP FAILS)
         run: |
           echo "INFO: Attempting to install dependencies with Yarn..."
-          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
           yarn install --immutable
