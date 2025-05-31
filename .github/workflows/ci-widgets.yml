@@ -8,7 +8,7 @@ on:
         description: 'Node.js version to use'
         required: false
         type: string
-        default: '18' # Ensure this is the Node version you intend to use
+        default: '22'
     secrets:
       PRIVATE_KEY_FOR_1FE:
         description: 'SSH private key for accessing docusign/1fe repository'
@@ -26,55 +26,28 @@ jobs:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
 
-      # This step replaces webfactory/ssh-agent
-      - name: Configure SSH for Specific Host Keys
+      - name: Set up SSH keys for all dependencies
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: | # Use YAML multi-line string to concatenate keys
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+      - name: Add github.com to known_hosts and configure Git URL rewrites
         run: |
+          echo "INFO: Adding github.com to known_hosts"
           mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          
-          echo "INFO: Writing private key for docusign/1fe to ~/.ssh/id_ed25519_1fe"
-          echo "${{ secrets.PRIVATE_KEY_FOR_1FE }}" > ~/.ssh/id_ed25519_1fe
-          chmod 600 ~/.ssh/id_ed25519_1fe
-          
-          echo "INFO: Writing private key for docusign/1fe-sample-widget-base-config to ~/.ssh/id_ed25519_1fe_sample_widget_base_config"
-          echo "${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}" > ~/.ssh/id_ed25519_1fe_sample_widget_base_config
-          chmod 600 ~/.ssh/id_ed25519_1fe_sample_widget_base_config
-          
-          echo "INFO: Creating SSH config file at ~/.ssh/config"
-          cat <<EOT > ~/.ssh/config
-          Host github.com-docusign-1fe
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/id_ed25519_1fe
-            IdentitiesOnly yes
-            StrictHostKeyChecking accept-new # Or use ssh-keyscan before this
-
-          Host github.com-docusign-1fe-sample-widget-base-config
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/id_ed25519_1fe_sample_widget_base_config
-            IdentitiesOnly yes
-            StrictHostKeyChecking accept-new # Or use ssh-keyscan before this
-          EOT
-          chmod 600 ~/.ssh/config
-          
-          echo "INFO: SSH Config content:"
-          cat ~/.ssh/config
-
-      # ssh-keyscan is still good practice, or use StrictHostKeyChecking accept-new in ~/.ssh/config
-      - name: Add github.com to known_hosts (optional if StrictHostKeyChecking=accept-new is used)
-        run: |
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Configure Git URL rewrites for SSH Host Aliases
-        run: |
-          echo "INFO: Configuring Git URL rewrites to use specific SSH identities via host aliases..."
-          git config --global url."git@github.com-docusign-1fe:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
-          git config --global url."git@github.com-docusign-1fe-sample-widget-base-config:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
+          echo "INFO: Configuring Git URL rewrites..."
+          git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
+          git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
           
           echo "INFO: Git global config:"
           git config --global --list
+          echo "INFO: SSH Agent status (keys loaded):"
+          ssh-add -l # Crucial: check if both keys are listed now
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -83,8 +56,7 @@ jobs:
           cache: 'yarn'
 
       - name: Install Dependencies
-        env:
-          GIT_TERMINAL_PROMPT: 0
         run: |
           echo "INFO: Attempting to install dependencies with Yarn..."
+          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
           yarn install --immutable
