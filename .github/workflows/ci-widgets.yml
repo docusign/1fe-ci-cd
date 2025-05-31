@@ -1,6 +1,5 @@
 # File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
 name: Reusable Minimal Widget CI
-
 on:
   workflow_call:
     inputs:
@@ -8,67 +7,43 @@ on:
         description: 'Node.js version to use'
         required: false
         type: string
-        default: '18' # Or '22' if that's your current target
+        default: '22'
     secrets:
       PRIVATE_KEY_FOR_1FE:
         description: 'SSH private key for accessing docusign/1fe repository'
-        required: true
+        required: true # Still required because package.json now uses SSH
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
         description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
-        required: true
+        required: true # Still required
 
 jobs:
   checkout_and_install:
     name: Checkout and Install Dependencies
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
 
-      - name: Configure SSH for Specific Host Keys
+      - name: Set up SSH keys for all dependencies
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: |
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+      - name: Add github.com to known_hosts
         run: |
           mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          
-          echo "INFO: Writing private key for docusign/1fe"
-          echo "${{ secrets.PRIVATE_KEY_FOR_1FE }}" > ~/.ssh/id_ed25519_1fe
-          chmod 600 ~/.ssh/id_ed25519_1fe
-          
-          echo "INFO: Writing private key for docusign/1fe-sample-widget-base-config"
-          echo "${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}" > ~/.ssh/id_ed25519_1fe_sample_widget_base_config
-          chmod 600 ~/.ssh/id_ed25519_1fe_sample_widget_base_config
-          
-          echo "INFO: Creating SSH config file"
-          cat <<EOT > ~/.ssh/config
-          Host github.com-docusign-1fe
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/id_ed25519_1fe
-            IdentitiesOnly yes
-
-          Host github.com-docusign-1fe-sample-widget-base-config
-            HostName github.com
-            User git
-            IdentityFile ~/.ssh/id_ed25519_1fe_sample_widget_base_config
-            IdentitiesOnly yes
-          EOT
-          chmod 600 ~/.ssh/config
-          
-          echo "INFO: SSH Config content:"
-          cat ~/.ssh/config
-
-      - name: Add github.com to known_hosts and Configure Git URL rewrites
-        run: |
-          # ssh-keyscan is good practice, ensures host authenticity
-          ssh-keyscan github.com >> ~/.ssh/known_hosts 
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+          echo "INFO: SSH Agent status (keys loaded):"
+          ssh-add -l
 
-          echo "INFO: Configuring Git URL rewrites to use specific SSH identities via host aliases..."
-          # Now we use the host aliases from ~/.ssh/config
-          git config --global url."git@github.com-docusign-1fe:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
-          git config --global url."git@github.com-docusign-1fe-sample-widget-base-config:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
-          
+      # Optional: Keep for other git operations, but Yarn should use SSH directly now
+      - name: Configure Git URL rewrites (optional fallback)
+        run: |
+          git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
+          git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
           echo "INFO: Git global config:"
           git config --global --list
 
@@ -80,7 +55,7 @@ jobs:
 
       - name: Install Dependencies
         env:
-          GIT_TERMINAL_PROMPT: 0 # Ensure Git doesn't try to prompt
+          GIT_TERMINAL_PROMPT: 0
         run: |
           echo "INFO: Attempting to install dependencies with Yarn..."
           yarn install --immutable
