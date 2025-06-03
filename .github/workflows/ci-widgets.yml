@@ -58,5 +58,4 @@ jobs:
       - name: Install Dependencies
         run: |
           echo "INFO: Attempting to install dependencies with Yarn..."
-          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
-          yarn install --immutable
+          yarn install --no-immutable
