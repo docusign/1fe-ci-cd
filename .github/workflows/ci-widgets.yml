@@ -60,3 +60,19 @@ jobs:
           echo "INFO: Attempting to install dependencies with Yarn..."
           # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
           yarn install --immutable
+
+      - name: Build the Widget
+        run: |
+          echo "INFO: Building the widget..."
+          CI=true yarn build:widget
+
+          # We want to view the contents of the dist folder and specifically the contents of dist/js/1fe-bundle.js
+          echo "INFO: Contents of dist folder:"
+          ls -la dist
+          echo "INFO: Contents of dist/js:"
+          ls -la dist/js
+          echo "INFO: Contents of dist/js/1fe-bundle.js:"
+          cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
+
+          
+
