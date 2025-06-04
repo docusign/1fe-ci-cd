@@ -56,20 +56,44 @@ jobs:
           cache: 'yarn'
 
      
-      - name: Extract widgetId and widgetVersion from package.json
+      - name: Extract widgetId, widgetVersion, and nextVersion from package.json
         id: extract_widget_info
         run: |
           widgetId=$(jq -r .name package.json)
           widgetVersion=$(jq -r .version package.json)
           echo "widgetId=$widgetId" >> $GITHUB_ENV
           echo "widgetVersion=$widgetVersion" >> $GITHUB_ENV
+
+          # Determine nextVersion
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)
+            nextVersion="${widgetVersion}-${short_sha}"
+            echo "PR run detected. nextVersion set to: $nextVersion"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            # Bump patch version by 1
+            IFS='.' read -r major minor patch <<< "$widgetVersion"
+            if [[ -z "$major" || -z "$minor" || -z "$patch" ]]; then
+              echo "Invalid version format: $widgetVersion"
+              exit 1
+            fi
+            patch=$((patch + 1))
+            nextVersion="${major}.${minor}.${patch}"
+            echo "Merge to main detected. nextVersion bumped to: $nextVersion"
+          else
+            nextVersion="$widgetVersion"
+            echo "Other run detected. nextVersion set to: $nextVersion"
+          fi
+
+          echo "nextVersion=$nextVersion" >> $GITHUB_ENV
           echo "Extracted widgetId: $widgetId"
           echo "Extracted widgetVersion: $widgetVersion"
+          echo "Persisted nextVersion: $nextVersion"
 
-      - name: Echo widgetId and widgetVersion
+      - name: Echo widgetId, widgetVersion, and nextVersion
         run: |
           echo "widgetId: $widgetId"
           echo "widgetVersion: $widgetVersion"
+          echo "nextVersion: $nextVersion"
 
       # - name: Install Dependencies
       #   run: |
