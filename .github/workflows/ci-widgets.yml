@@ -55,24 +55,40 @@ jobs:
           node-version: ${{ inputs.node-version }}
           cache: 'yarn'
 
-      - name: Install Dependencies
+     
+      - name: Extract widgetId and widgetVersion from package.json
+        id: extract_widget_info
         run: |
-          echo "INFO: Attempting to install dependencies with Yarn..."
-          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
-          yarn install --no-immutable
+          widgetId=$(jq -r .name package.json)
+          widgetVersion=$(jq -r .version package.json)
+          echo "widgetId=$widgetId" >> $GITHUB_ENV
+          echo "widgetVersion=$widgetVersion" >> $GITHUB_ENV
+          echo "Extracted widgetId: $widgetId"
+          echo "Extracted widgetVersion: $widgetVersion"
 
-      - name: Build the Widget
+      - name: Echo widgetId and widgetVersion
         run: |
-          echo "INFO: Building the widget..."
-          CI=true yarn build:widget
+          echo "widgetId: $widgetId"
+          echo "widgetVersion: $widgetVersion"
 
-          # We want to view the contents of the dist folder and specifically the contents of dist/js/1fe-bundle.js
-          echo "INFO: Contents of dist folder:"
-          ls -la dist
-          echo "INFO: Contents of dist/js:"
-          ls -la dist/js
-          echo "INFO: Contents of dist/js/1fe-bundle.js:"
-          cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
+      # - name: Install Dependencies
+      #   run: |
+      #     echo "INFO: Attempting to install dependencies with Yarn..."
+      #     # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
+      #     yarn install --no-immutable
 
-          
+      # - name: Build the Widget
+      #   run: |
+      #     echo "INFO: Building the widget..."
+      #     CI=true yarn build:widget
+
+      #     # We want to view the contents of the dist folder and specifically the contents of dist/js/1fe-bundle.js
+      #     echo "INFO: Contents of dist folder:"
+      #     ls -la dist
+      #     echo "INFO: Contents of dist/js:"
+      #     ls -la dist/js
+      #     echo "INFO: Contents of dist/js/1fe-bundle.js:"
+      #     cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
+
+
 
