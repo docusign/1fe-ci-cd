@@ -144,74 +144,35 @@ jobs:
           # ----- End: Input Validation and Key Setup -----
 
           src_dir="dist/"
-          # Ensure widgetId and nextVersion are correctly populated from GITHUB_ENV
           dest_dir="integration/widgets/$widgetId/$nextVersion/" 
           
-          # ----- Start: Enhanced Debugging Section -----
-          echo "--- Runner Environment Debugging ---"
-          echo "Runner current working directory: $(pwd)"
+          # ----- Start: Basic Debugging Information -----
+          echo "--- Runner Environment ---"
+          echo "Current working directory: $(pwd)"
           echo "Widget ID: $widgetId"
           echo "Next Version: $nextVersion"
-          echo "Source directory variable (\$src_dir): $src_dir"
-          echo "Destination directory variable (\$dest_dir): $dest_dir"
+          echo "Source directory (\$src_dir): $src_dir"
+          echo "Destination directory (\$dest_dir): $dest_dir"
           
           echo "--- Source Directory Contents ---"
-          echo "Listing contents of source directory '$src_dir':"
           ls -la "$src_dir"
           
-          echo "--- SSH Key File Check ---"
-          echo "Checking key file '$HOME/key.pem':"
+          echo "--- SSH Key File ---"
           ls -l "$HOME/key.pem"
-          echo "Attempting to get fingerprint of key.pem (can fail for some key formats but key might still be valid):"
-          ssh-keygen -lf "$HOME/key.pem" || echo "INFO: ssh-keygen -lf failed (not necessarily an error)."
+          # ----- End: Basic Debugging Information -----
 
           REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
           SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $HOME/key.pem" 
 
-          echo "--- Remote Server Path Inspection (Before Rsync) ---"
-          echo "INFO: Attempting to list base directory for user 'sshacs' on Akamai:"
-          ssh $SSH_OPTS "$REMOTE_HOST" "ls -la" || echo "WARNING: Failed to list base directory on remote."
-          
-          echo "INFO: Attempting to list components of destination path '$dest_dir' on remote:"
-          widget_id_base_path=""
-          if [[ "$widgetId" == *"/"* ]]; then
-            widget_id_base_path="${widgetId%/*}"
-          fi
-
-          path_to_check="integration"
-          echo "Checking remote: $path_to_check"
-          ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$path_to_check'" || echo "INFO: '$path_to_check' does not exist or is not accessible."
-          
-          path_to_check="integration/widgets"
-          echo "Checking remote: $path_to_check"
-          ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$path_to_check'" || echo "INFO: '$path_to_check' does not exist or is not accessible."
-          
-          if [ -n "$widget_id_base_path" ]; then
-            path_to_check="integration/widgets/$widget_id_base_path"
-            echo "Checking remote: $path_to_check"
-            ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$path_to_check'" || echo "INFO: '$path_to_check' does not exist or is not accessible."
-          fi
-          
-          path_to_check="integration/widgets/$widgetId"
-          echo "Checking remote: $path_to_check"
-          ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$path_to_check'" || echo "INFO: '$path_to_check' does not exist or is not accessible."
-
-          path_to_check="integration/widgets/$widgetId/$nextVersion" 
-          echo "Checking remote (full destination without trailing slash): $path_to_check"
-          ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$path_to_check'" || echo "INFO: '$path_to_check' does not exist or is not accessible."
-          # ----- End: Enhanced Debugging Section -----
-
           echo "--- Rsync Upload Attempt ---"
           # Base rsync command: archive, verbose, verbose, make-path
+          # --dry-run is no longer added by default for PRs.
           RSYNC_CMD="rsync -avv --mkpath" 
 
-          # Conditional Dry Run for PRs
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "INFO: This is a Pull Request. Adding --dry-run to rsync."
-            RSYNC_CMD="$RSYNC_CMD --dry-run"
+            echo "INFO: This is a Pull Request. Rsync will perform a real upload to '$dest_dir'."
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "INFO: This is a push to the main branch. Rsync will upload without deleting."
-            # No --delete flag is added here, respecting your requirement.
+            echo "INFO: This is a push to the main branch. Rsync will upload without deleting to '$dest_dir'."
           fi
 
           echo "INFO: Preparing to execute: $RSYNC_CMD -e \"ssh $SSH_OPTS\" \"$src_dir\" \"$REMOTE_HOST:'$dest_dir'\""
@@ -220,10 +181,8 @@ jobs:
             -e "ssh $SSH_OPTS" \
             "$src_dir" \
             "$REMOTE_HOST:'$dest_dir'"
-          # The script will exit here if rsync fails, due to 'set -e'
+          # The script will exit here if rsync fails (due to 'set -e')
 
           echo "INFO: Rsync command finished successfully."
           echo "INFO: Upload complete. Cleaning up SSH key."
           shred -u "$HOME/key.pem" || rm -f "$HOME/key.pem"
-
-
