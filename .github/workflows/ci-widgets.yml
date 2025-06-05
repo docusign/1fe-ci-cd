@@ -120,67 +120,75 @@ jobs:
           echo "INFO: Contents of dist/js/1fe-bundle.js:"
           cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
 
-      - name: Upload widget to Akamai NetStorage via rsync
+      - name: Upload widget via rsync (Relative Path Method)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
         env:
           AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
-          # IMPORTANT: Determine your correct Akamai Upload Directory/Storage Group ID
-          # This might be something like '13000CB' based on your screenshot.
-          # You might need to set this as a secret or variable if it changes per environment.
-          AKAMAI_UPLOAD_DIRECTORY: "1800003"
         run: |
           set -e
           
-          # ... (SSH key setup - no changes needed here) ...
-          if [ -z "$AKAMAI_NS_SSH_PRIVATE_KEY" ]; then
-            echo "ERROR: AKAMAI_NS_SSH_PRIVATE_KEY is not set. Skipping upload."
-            exit 1
-          fi
+          # ----- SSH Key Setup -----
           echo "INFO: Setting up SSH key for Akamai NetStorage upload..."
-          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$HOME/key.pem"
-          chmod 600 "$HOME/key.pem"
-          if [ ! -s "$HOME/key.pem" ]; then
-            echo "ERROR: SSH key file $HOME/key.pem is empty or missing. Skipping upload."
-            exit 1
-          fi
+          SSH_KEY_PATH="$HOME/key.pem"
+          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
+          chmod 600 "$SSH_KEY_PATH"
+          # ----- End SSH Key Setup -----
 
-          src_dir="dist/"
-          # Construct an ABSOLUTE path for the remote destination
-          # Note the leading "/" after the $AKAMAI_UPLOAD_DIRECTORY
-          dest_dir="/${AKAMAI_UPLOAD_DIRECTORY}/integration/widgets/$widgetId/$nextVersion/"
+          # --- Define Paths for Relative Upload ---
+          local_source_dir="dist" # Your original build output
+          staging_dir="staging_for_rsync" # A temporary directory for staging files
+
+          # This is the path structure we want to REPLICATE on the remote server.
+          relative_path_to_create="integration/widgets/$widgetId/$nextVersion"
+
+          # This is the remote base where the relative path will be created.
+          # Note: This is now the sshacs user's home/landing directory.
+          remote_base_dir="" 
+
+          echo "--- Upload Configuration ---"
+          echo "Local Source: '$local_source_dir/'"
+          echo "Relative Path to be Created by rsync -R: '$relative_path_to_create'"
           
-          echo "--- Runner Environment ---"
-          echo "Widget ID: $widgetId"
-          echo "Next Version: $nextVersion"
-          echo "Akamai Upload Directory: $AKAMAI_UPLOAD_DIRECTORY"
-          echo "Source directory (\$src_dir): $src_dir"
-          echo "Destination directory for rsync (\$dest_dir): $dest_dir"
-          echo "--- Source Directory Contents ---"
-          ls -la "$src_dir"
+          # ----- Step 1: Create the local staging directory structure -----
+          echo "INFO: Preparing local staging directory..."
+          full_staging_path="$staging_dir/$relative_path_to_create"
+          mkdir -p "$full_staging_path"
           
+          # Copy the contents of 'dist/' into the deepest part of the staging path.
+          # The '/.' at the end of the source ensures the *contents* of 'dist' are copied.
+          echo "INFO: Copying source files to staging area..."
+          cp -a "$local_source_dir/." "$full_staging_path/"
+          echo "INFO: Staged directory contents (abbreviated):"
+          ls -lR "$staging_dir" | head -n 10 # Show first 10 lines to avoid excessive logs
+
+          # ----- Step 2: Upload using rsync -R (relative) -----
           REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
-          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $HOME/key.pem"
+          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
 
-          echo "--- Rsync Upload Attempt ---"
-          RSYNC_BASE_CMD="rsync -avv --mkpath" 
+          # We will cd into the staging dir so rsync's relative path starts correctly.
+          cd "$staging_dir"
 
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "INFO: This is a Pull Request. Rsync will perform a real upload to the absolute path '$dest_dir'."
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "INFO: This is a push to the main branch. Rsync will upload (no delete) to absolute path '$dest_dir'."
-          fi
-
-          # Construct the destination argument for rsync: user@host:/absolute/path
-          # The initial '/' in dest_dir makes it absolute on the remote.
-          FULL_DEST_ARG="$REMOTE_HOST:$dest_dir" 
-
-          echo "INFO: Preparing to execute: $RSYNC_BASE_CMD -e \"ssh $SSH_OPTS\" \"$src_dir\" \"$FULL_DEST_ARG\""
+          # The source for rsync is now the top-level directory inside staging.
+          # The -R flag will ensure this path is created on the remote.
+          rsync_source="integration/"
           
-          $RSYNC_BASE_CMD \
-            -e "$SSH_OPTS" \
-            "$src_dir" \
-            "$FULL_DEST_ARG"
-
+          echo "--- Rsync Upload Attempt ---"
+          echo "INFO: Starting rsync with -R (relative) option..."
+          
+          # Using '-avvR'. The -R is the key flag here.
+          # The destination is just the remote host and the base directory.
+          rsync -avvR \
+            -e "ssh $SSH_OPTS" \
+            "$rsync_source" \
+            "$REMOTE_HOST:$remote_base_dir"
+            
+          # Go back to the original directory before continuing.
+          cd ..
+          
+          # ----- Step 3: Cleanup -----
+          echo "INFO: Cleaning up local staging directory..."
+          rm -rf "$staging_dir"
+          
           echo "INFO: Rsync command finished successfully."
           echo "INFO: Upload complete. Cleaning up SSH key."
-          shred -u "$HOME/key.pem" || rm -f "$HOME/key.pem"
+          shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
