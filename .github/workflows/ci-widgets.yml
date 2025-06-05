@@ -164,6 +164,34 @@ jobs:
           REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
           SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $HOME/key.pem" 
 
+          echo "--- Manual Remote Path Check & Creation Attempt ---"
+          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
+          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $HOME/key.pem"
+
+          current_path=""
+          # Note: IFS is set to preserve spaces if any component had them (unlikely here)
+          IFS='/' read -r -a path_components <<< "integration/widgets/$widgetId/$nextVersion"
+          
+          for component in "${path_components[@]}"; do
+            if [ -z "$current_path" ]; then
+              current_path="$component"
+            else
+              current_path="$current_path/$component"
+            fi
+            
+            echo "INFO: Checking remote path component: '$current_path'"
+            ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$current_path'" || echo "INFO: Could not list '$current_path'. It might not exist or no permission."
+            
+            echo "INFO: Attempting to create remote path component (if it's a directory): '$current_path'"
+            # Attempt mkdir. If it's a file, this should fail. If it's a dir, it's harmless.
+            # If it doesn't exist, it tries to create it.
+            ssh $SSH_OPTS "$REMOTE_HOST" "if [ -d '$current_path' ]; then echo \"'$current_path' is already a directory.\"; elif [ -f '$current_path' ]; then echo \"ERROR: '$current_path' is a FILE, not a directory.\"; exit 20; else mkdir -v '$current_path'; fi" || echo "WARNING: Attempt to ensure/create '$current_path' failed or reported an issue."
+          done
+          
+          echo "INFO: Final check of the full destination directory '$dest_dir' after manual attempts:"
+          ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$dest_dir'" || echo "WARNING: Full destination directory '$dest_dir' still problematic after manual attempts."
+
+
           echo "--- Rsync Upload Attempt ---"
           # Base rsync command: archive, verbose, verbose, make-path
           # --dry-run is no longer added by default for PRs.
