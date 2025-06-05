@@ -16,7 +16,10 @@ on:
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
         description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
         required: true
-
+      AKAMAI_NS_SSH_PRIVATE_KEY: 
+              description: 'SSH private key for Akamai NetStorage upload, sourced from Organization Secrets'
+              required: true 
+        
 jobs:
   checkout_and_install:
     name: Checkout and Install Dependencies
