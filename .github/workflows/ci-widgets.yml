@@ -124,10 +124,14 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
         env:
           AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+          # IMPORTANT: Determine your correct Akamai Upload Directory/Storage Group ID
+          # This might be something like '13000CB' based on your screenshot.
+          # You might need to set this as a secret or variable if it changes per environment.
+          AKAMAI_UPLOAD_DIRECTORY: "1800003"
         run: |
           set -e
           
-          # ... (SSH key setup from your script: echo key, chmod, empty check) ...
+          # ... (SSH key setup - no changes needed here) ...
           if [ -z "$AKAMAI_NS_SSH_PRIVATE_KEY" ]; then
             echo "ERROR: AKAMAI_NS_SSH_PRIVATE_KEY is not set. Skipping upload."
             exit 1
@@ -141,51 +145,41 @@ jobs:
           fi
 
           src_dir="dist/"
-          # Remove trailing slash from dest_dir to avoid rsync "Not a directory" error
-          dest_dir="integration/widgets/$widgetId/$nextVersion"
+          # Construct an ABSOLUTE path for the remote destination
+          # Note the leading "/" after the $AKAMAI_UPLOAD_DIRECTORY
+          dest_dir="/${AKAMAI_UPLOAD_DIRECTORY}/integration/widgets/$widgetId/$nextVersion/"
           
-          # ----- Start: Debugging Information (kept for this run) -----
           echo "--- Runner Environment ---"
           echo "Widget ID: $widgetId"
           echo "Next Version: $nextVersion"
+          echo "Akamai Upload Directory: $AKAMAI_UPLOAD_DIRECTORY"
           echo "Source directory (\$src_dir): $src_dir"
-          echo "Destination directory (\$dest_dir): $dest_dir"
+          echo "Destination directory for rsync (\$dest_dir): $dest_dir"
           echo "--- Source Directory Contents ---"
           ls -la "$src_dir"
+          
           REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
           SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $HOME/key.pem"
-          # You can re-enable these remote ls checks if needed, but the quoting fix is primary
-          # echo "--- Remote Server Path Inspection (Before Rsync) ---"
-          # ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld 'integration' 'integration/widgets' 'integration/widgets/${widgetId%/*}' 'integration/widgets/$widgetId' 'integration/widgets/$widgetId/$nextVersion'" || echo "INFO: Initial ls -ld checks encountered an issue or path does not exist."
-          # ----- End: Debugging Information -----
 
           echo "--- Rsync Upload Attempt ---"
-          # Base rsync command
           RSYNC_BASE_CMD="rsync -avv --mkpath" 
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "INFO: This is a Pull Request. Rsync will perform a real upload to '$dest_dir'."
-            # No --dry-run, uploads directly
+            echo "INFO: This is a Pull Request. Rsync will perform a real upload to the absolute path '$dest_dir'."
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "INFO: This is a push to the main branch. Rsync will upload without deleting to '$dest_dir'."
+            echo "INFO: This is a push to the main branch. Rsync will upload (no delete) to absolute path '$dest_dir'."
           fi
 
-          # Construct the remote shell command explicitly
-          REMOTE_SHELL_CMD="ssh $SSH_OPTS"
+          # Construct the destination argument for rsync: user@host:/absolute/path
+          # The initial '/' in dest_dir makes it absolute on the remote.
+          FULL_DEST_ARG="$REMOTE_HOST:$dest_dir" 
 
-          # The destination path, as rsync will see it *after* the host part
-          # This should NOT have extra quotes that the local shell would add to the rsync argument list.
-          REMOTE_PATH_FOR_RSYNC="$dest_dir"
-          FULL_DEST_ARG="$REMOTE_HOST:$REMOTE_PATH_FOR_RSYNC"
-
-          echo "INFO: Preparing to execute: $RSYNC_BASE_CMD -e \"$REMOTE_SHELL_CMD\" \"$src_dir\" \"$FULL_DEST_ARG\""
+          echo "INFO: Preparing to execute: $RSYNC_BASE_CMD -e \"ssh $SSH_OPTS\" \"$src_dir\" \"$FULL_DEST_ARG\""
           
-          # Execute rsync
           $RSYNC_BASE_CMD \
-            -e "$REMOTE_SHELL_CMD" \
+            -e "$SSH_OPTS" \
             "$src_dir" \
-            "$FULL_DEST_ARG" 
-          # Script will fail here if rsync has an error due to 'set -e'
+            "$FULL_DEST_ARG"
 
           echo "INFO: Rsync command finished successfully."
           echo "INFO: Upload complete. Cleaning up SSH key."
