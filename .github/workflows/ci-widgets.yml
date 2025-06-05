@@ -120,6 +120,11 @@ jobs:
           echo "INFO: Contents of dist/js/1fe-bundle.js:"
           cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
 
+      - name: Unit Test
+        run: |
+          echo "INFO: Running unit tests with yarn test..."
+          yarn test
+
       - name: Upload widget to Akamai NetStorage via rsync
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
         env:
