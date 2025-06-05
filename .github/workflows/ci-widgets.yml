@@ -95,24 +95,47 @@ jobs:
           echo "widgetVersion: $widgetVersion"
           echo "nextVersion: $nextVersion"
 
-      # - name: Install Dependencies
-      #   run: |
-      #     echo "INFO: Attempting to install dependencies with Yarn..."
-      #     # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
-      #     yarn install --no-immutable
+      - name: Install Dependencies
+        run: |
+          echo "INFO: Attempting to install dependencies with Yarn..."
+          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
+          yarn install --no-immutable
 
-      # - name: Build the Widget
-      #   run: |
-      #     echo "INFO: Building the widget..."
-      #     CI=true yarn build:widget
+      - name: Build the Widget
+        run: |
+          echo "INFO: Building the widget..."
+          CI=true yarn build:widget
 
-      #     # We want to view the contents of the dist folder and specifically the contents of dist/js/1fe-bundle.js
-      #     echo "INFO: Contents of dist folder:"
-      #     ls -la dist
-      #     echo "INFO: Contents of dist/js:"
-      #     ls -la dist/js
-      #     echo "INFO: Contents of dist/js/1fe-bundle.js:"
-      #     cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
+          # We want to view the contents of the dist folder and specifically the contents of dist/js/1fe-bundle.js
+          echo "INFO: Contents of dist folder:"
+          ls -la dist
+          echo "INFO: Contents of dist/js:"
+          ls -la dist/js
+          echo "INFO: Contents of dist/js/1fe-bundle.js:"
+          cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
+
+      - name: Upload widget to Akamai NetStorage via rsync
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
+        env:
+          AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+        run: |
+          set -e
+          echo "Setting up SSH key for Akamai NetStorage upload..."
+          echo "$AKAMAI_NS_SSH_PRIVATE_KEY" > $HOME/key.pem
+          chmod 600 $HOME/key.pem
+
+          src_dir="dist/"
+          dest_dir="integration/widgets/$widgetId/$nextVersion/"
+          echo "Uploading $src_dir to Akamai NetStorage at $dest_dir"
+
+          rsync -avv \
+            -e "ssh -o StrictHostKeyChecking=no -i $HOME/key.pem" \
+            "$src_dir" \
+            "sshacs@1fe.rsync.upload.akamai.com:$dest_dir" \
+          || echo "WARNING: rsync finished with a non-zero exit code ($?). Please check logs above for any errors."
+
+          echo "Upload complete. Cleaning up SSH key."
+          shred -u $HOME/key.pem || rm -f $HOME/key.pem
 
 
 
