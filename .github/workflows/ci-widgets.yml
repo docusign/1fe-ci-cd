@@ -125,91 +125,59 @@ jobs:
         env:
           AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
         run: |
-          set -e # Exit immediately if a command exits with a non-zero status.
+          set -e
           
-          # ----- Start: Input Validation and Key Setup -----
+          # ... (SSH key setup from your script: echo key, chmod, empty check) ...
           if [ -z "$AKAMAI_NS_SSH_PRIVATE_KEY" ]; then
             echo "ERROR: AKAMAI_NS_SSH_PRIVATE_KEY is not set. Skipping upload."
             exit 1
           fi
-
           echo "INFO: Setting up SSH key for Akamai NetStorage upload..."
           printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$HOME/key.pem"
           chmod 600 "$HOME/key.pem"
-
           if [ ! -s "$HOME/key.pem" ]; then
             echo "ERROR: SSH key file $HOME/key.pem is empty or missing. Skipping upload."
             exit 1
           fi
-          # ----- End: Input Validation and Key Setup -----
 
           src_dir="dist/"
           dest_dir="integration/widgets/$widgetId/$nextVersion/" 
           
-          # ----- Start: Basic Debugging Information -----
+          # ----- Start: Debugging Information (kept for this run) -----
           echo "--- Runner Environment ---"
-          echo "Current working directory: $(pwd)"
           echo "Widget ID: $widgetId"
           echo "Next Version: $nextVersion"
           echo "Source directory (\$src_dir): $src_dir"
           echo "Destination directory (\$dest_dir): $dest_dir"
-          
           echo "--- Source Directory Contents ---"
           ls -la "$src_dir"
-          
-          echo "--- SSH Key File ---"
-          ls -l "$HOME/key.pem"
-          # ----- End: Basic Debugging Information -----
-
-          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
-          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $HOME/key.pem" 
-
-          echo "--- Manual Remote Path Check & Creation Attempt ---"
           REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
           SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $HOME/key.pem"
-
-          current_path=""
-          # Note: IFS is set to preserve spaces if any component had them (unlikely here)
-          IFS='/' read -r -a path_components <<< "integration/widgets/$widgetId/$nextVersion"
-          
-          for component in "${path_components[@]}"; do
-            if [ -z "$current_path" ]; then
-              current_path="$component"
-            else
-              current_path="$current_path/$component"
-            fi
-            
-            echo "INFO: Checking remote path component: '$current_path'"
-            ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$current_path'" || echo "INFO: Could not list '$current_path'. It might not exist or no permission."
-            
-            echo "INFO: Attempting to create remote path component (if it's a directory): '$current_path'"
-            # Attempt mkdir. If it's a file, this should fail. If it's a dir, it's harmless.
-            # If it doesn't exist, it tries to create it.
-            ssh $SSH_OPTS "$REMOTE_HOST" "if [ -d '$current_path' ]; then echo \"'$current_path' is already a directory.\"; elif [ -f '$current_path' ]; then echo \"ERROR: '$current_path' is a FILE, not a directory.\"; exit 20; else mkdir -v '$current_path'; fi" || echo "WARNING: Attempt to ensure/create '$current_path' failed or reported an issue."
-          done
-          
-          echo "INFO: Final check of the full destination directory '$dest_dir' after manual attempts:"
-          ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld '$dest_dir'" || echo "WARNING: Full destination directory '$dest_dir' still problematic after manual attempts."
-
+          # You can re-enable these remote ls checks if needed, but the quoting fix is primary
+          # echo "--- Remote Server Path Inspection (Before Rsync) ---"
+          # ssh $SSH_OPTS "$REMOTE_HOST" "ls -ld 'integration' 'integration/widgets' 'integration/widgets/${widgetId%/*}' 'integration/widgets/$widgetId' 'integration/widgets/$widgetId/$nextVersion'" || echo "INFO: Initial ls -ld checks encountered an issue or path does not exist."
+          # ----- End: Debugging Information -----
 
           echo "--- Rsync Upload Attempt ---"
-          # Base rsync command: archive, verbose, verbose, make-path
-          # --dry-run is no longer added by default for PRs.
-          RSYNC_CMD="rsync -avv --mkpath" 
+          RSYNC_CMD="rsync -avv --mkpath" # --mkpath is still good
 
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "INFO: This is a Pull Request. Rsync will perform a real upload to '$dest_dir'."
+            # No --dry-run, uploads directly as per your previous request
           elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "INFO: This is a push to the main branch. Rsync will upload without deleting to '$dest_dir'."
           fi
 
-          echo "INFO: Preparing to execute: $RSYNC_CMD -e \"ssh $SSH_OPTS\" \"$src_dir\" \"$REMOTE_HOST:'$dest_dir'\""
+          # THE CRUCIAL CHANGE IS HERE: Removed single quotes around $dest_dir
+          DESTINATION_ARG="$REMOTE_HOST:$dest_dir" 
+
+          echo "INFO: Preparing to execute: $RSYNC_CMD -e \"ssh $SSH_OPTS\" \"$src_dir\" \"$DESTINATION_ARG\""
           
           $RSYNC_CMD \
             -e "ssh $SSH_OPTS" \
             "$src_dir" \
-            "$REMOTE_HOST:'$dest_dir'"
-          # The script will exit here if rsync fails (due to 'set -e')
+            "$DESTINATION_ARG" 
+          # Script will fail here if rsync has an error due to 'set -e'
 
           echo "INFO: Rsync command finished successfully."
           echo "INFO: Upload complete. Cleaning up SSH key."
