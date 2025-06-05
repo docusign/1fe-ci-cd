@@ -175,11 +175,7 @@ jobs:
 
           # The destination path, as rsync will see it *after* the host part
           # This should NOT have extra quotes that the local shell would add to the rsync argument list.
-          REMOTE_PATH_FOR_RSYNC="$dest_dir" # $dest_dir already has the trailing slash
-
-          # The full destination argument for rsync (host + path)
-          # No extra shell quotes around REMOTE_PATH_FOR_RSYNC here for the local rsync command.
-          # Rsync itself will handle quoting/escaping for the remote shell if needed.
+          REMOTE_PATH_FOR_RSYNC="$dest_dir"
           FULL_DEST_ARG="$REMOTE_HOST:$REMOTE_PATH_FOR_RSYNC"
 
           echo "INFO: Preparing to execute: $RSYNC_BASE_CMD -e \"$REMOTE_SHELL_CMD\" \"$src_dir\" \"$FULL_DEST_ARG\""
