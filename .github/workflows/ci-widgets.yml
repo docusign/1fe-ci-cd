@@ -53,8 +53,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
+          registry-url: https://registry.npmjs.org/
           cache: 'yarn'
 
+      - name: Cache for Turbo
+        uses: rharkor/caching-for-turbo@v1.8
      
       - name: Extract widgetId, widgetVersion, and nextVersion from package.json
         id: extract_widget_info
@@ -120,9 +123,19 @@ jobs:
           AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
         run: |
           set -e
+          if [ -z "$AKAMAI_NS_SSH_PRIVATE_KEY" ]; then
+            echo "ERROR: AKAMAI_NS_SSH_PRIVATE_KEY is not set. Skipping upload."
+            exit 1
+          fi
+
           echo "Setting up SSH key for Akamai NetStorage upload..."
           echo "$AKAMAI_NS_SSH_PRIVATE_KEY" > $HOME/key.pem
           chmod 600 $HOME/key.pem
+
+          if [ ! -s "$HOME/key.pem" ]; then
+            echo "ERROR: SSH key file $HOME/key.pem is empty or missing. Skipping upload."
+            exit 1
+          fi
 
           src_dir="dist/"
           dest_dir="integration/widgets/$widgetId/$nextVersion/"
