@@ -141,7 +141,8 @@ jobs:
           fi
 
           src_dir="dist/"
-          dest_dir="integration/widgets/$widgetId/$nextVersion/" 
+          # Remove trailing slash from dest_dir to avoid rsync "Not a directory" error
+          dest_dir="integration/widgets/$widgetId/$nextVersion"
           
           # ----- Start: Debugging Information (kept for this run) -----
           echo "--- Runner Environment ---"
