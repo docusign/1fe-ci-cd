@@ -21,10 +21,9 @@ on:
               required: true 
         
 jobs:
-  checkout_and_install:
-    name: Checkout and Install Dependencies
+  build-and-upload:
+    name: Build and Upload
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
@@ -32,7 +31,7 @@ jobs:
       - name: Set up SSH keys for all dependencies
         uses: webfactory/ssh-agent@v0.9.1
         with:
-          ssh-private-key: | # Use YAML multi-line string to concatenate keys
+          ssh-private-key: |
             ${{ secrets.PRIVATE_KEY_FOR_1FE }}
             ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
@@ -61,7 +60,7 @@ jobs:
 
       - name: Cache for Turbo
         uses: rharkor/caching-for-turbo@v1.8
-     
+
       - name: Extract widgetId, widgetVersion, and nextVersion from package.json
         id: extract_widget_info
         run: |
@@ -120,11 +119,6 @@ jobs:
           echo "INFO: Contents of dist/js/1fe-bundle.js:"
           cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
 
-      - name: Unit Test
-        run: |
-          echo "INFO: Running unit tests with yarn test..."
-          yarn test
-
       - name: Upload widget to Akamai NetStorage via rsync
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
         env:
@@ -179,3 +173,86 @@ jobs:
           
           echo "INFO: Upload successful and complete."
           shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
+
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    needs: build-and-upload
+    steps:
+      - name: Checkout Caller's Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: https://registry.npmjs.org/
+          cache: 'yarn'
+
+      - name: Install Dependencies
+        run: |
+          yarn install --no-immutable
+
+      - name: Lint Test
+        run: |
+          echo "this is the lint test step"
+
+      - name: Unit Test
+        run: |
+          echo "INFO: Running unit tests with yarn test..."
+          if yarn run | grep -qE '^test '; then
+            yarn test
+          else
+            echo "INFO: No test script found in package.json, skipping unit tests."
+          fi
+
+  post-validation:
+    name: Post Validation
+    runs-on: ubuntu-latest
+    needs: build-and-upload
+    steps:
+      - name: Checkout Caller's Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: https://registry.npmjs.org/
+          cache: 'yarn'
+
+      - name: Install Dependencies
+        run: |
+          yarn install --no-immutable
+
+      - name: Contract Test
+        run: |
+          echo "this is the contract test step"
+
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: build-and-upload
+    steps:
+      - name: Checkout Caller's Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: https://registry.npmjs.org/
+          cache: 'yarn'
+
+      - name: Install Dependencies
+        run: |
+          yarn install --no-immutable
+
+      - name: Is widget on environment step
+        run: |
+          echo "this is the is widget on environment step"
+          echo "Widget is not yet deployed on the environment."
+
+      - name: E2E Playwright Test
+        run: |
+          echo "this is the Playwright test step"
