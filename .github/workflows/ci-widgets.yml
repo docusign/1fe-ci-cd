@@ -1,25 +1,35 @@
 # File: docusign/1fe-ci-cd/.github/workflows/ci-widgets.yml
 name: Reusable Minimal Widget CI
 
+permissions:
+  id-token: write
+  contents: read
+
 on:
   workflow_call:
     inputs:
       node-version:
-        description: 'Node.js version to use'
+        description: "Node.js version to use"
         required: false
         type: string
-        default: '22'
+        default: "22"
     secrets:
-      PRIVATE_KEY_FOR_1FE:
-        description: 'SSH private key for accessing docusign/1fe repository'
+      PRIVATE_KEY_FOR_1FE: # TODO remove this once the 1fe repository is made public
+        description: "SSH private key for accessing docusign/1fe repository"
         required: true
-      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
-        description: 'SSH private key for accessing docusign/1fe-sample-widget-base-config repository'
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: # TODO remove this once the widget base config is made public
+        description: "SSH private key for accessing docusign/1fe-sample-widget-base-config repository"
         required: true
-      AKAMAI_NS_SSH_PRIVATE_KEY: 
-              description: 'SSH private key for Akamai NetStorage upload, sourced from Organization Secrets'
-              required: true 
-        
+      AKAMAI_NS_SSH_PRIVATE_KEY:
+        description: "SSH private key for Akamai NetStorage upload, sourced from Organization Secrets"
+        required: true
+      AZURE_APP_CONFIG_CONNECTION_STRING:
+        description: "Azure App Configuration connection string, sourced from Organization Secrets"
+        required: true
+      AZURE_STORAGE_SAS_TOKEN:
+        description: "Azure Storage SAS token for widget upload, sourced from Organization Secrets"
+        required: true
+
 jobs:
   build-and-upload:
     name: Build and Upload
@@ -28,151 +38,49 @@ jobs:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
 
-      - name: Set up SSH keys for all dependencies
+      - name: Set up dependency SSH keys
         uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: |
             ${{ secrets.PRIVATE_KEY_FOR_1FE }}
             ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
-      - name: Add github.com to known_hosts and configure Git URL rewrites
-        run: |
-          echo "INFO: Adding github.com to known_hosts"
-          mkdir -p ~/.ssh
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-          echo "INFO: Configuring Git URL rewrites..."
-          git config --global url."git@github.com:docusign/1fe.git".insteadOf "https://github.com/docusign/1fe.git"
-          git config --global url."git@github.com:docusign/1fe-sample-widget-base-config.git".insteadOf "https://github.com/docusign/1fe-sample-widget-base-config.git"
-          
-          echo "INFO: Git global config:"
-          git config --global --list
-          echo "INFO: SSH Agent status (keys loaded):"
-          ssh-add -l # Crucial: check if both keys are listed now
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-          registry-url: https://registry.npmjs.org/
-          cache: 'yarn'
-
-      - name: Cache for Turbo
-        uses: rharkor/caching-for-turbo@v1.8
-
-      - name: Extract widgetId, widgetVersion, and nextVersion from package.json
-        id: extract_widget_info
-        run: |
-          widgetId=$(jq -r .name package.json)
-          widgetVersion=$(jq -r .version package.json)
-          echo "widgetId=$widgetId" >> $GITHUB_ENV
-          echo "widgetVersion=$widgetVersion" >> $GITHUB_ENV
-
-          # Determine nextVersion
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)
-            nextVersion="${widgetVersion}-${short_sha}"
-            echo "PR run detected. nextVersion set to: $nextVersion"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            # Bump patch version by 1
-            IFS='.' read -r major minor patch <<< "$widgetVersion"
-            if [[ -z "$major" || -z "$minor" || -z "$patch" ]]; then
-              echo "Invalid version format: $widgetVersion"
-              exit 1
-            fi
-            patch=$((patch + 1))
-            nextVersion="${major}.${minor}.${patch}"
-            echo "Merge to main detected. nextVersion bumped to: $nextVersion"
-          else
-            nextVersion="$widgetVersion"
-            echo "Other run detected. nextVersion set to: $nextVersion"
-          fi
-
-          echo "nextVersion=$nextVersion" >> $GITHUB_ENV
-          echo "Extracted widgetId: $widgetId"
-          echo "Extracted widgetVersion: $widgetVersion"
-          echo "Persisted nextVersion: $nextVersion"
-
-      - name: Echo widgetId, widgetVersion, and nextVersion
-        run: |
-          echo "widgetId: $widgetId"
-          echo "widgetVersion: $widgetVersion"
-          echo "nextVersion: $nextVersion"
+          cache: "yarn"
 
       - name: Install Dependencies
         run: |
-          echo "INFO: Attempting to install dependencies with Yarn..."
-          # Use --immutable as recommended by Yarn 4.x, and --verbose for more detail
           yarn install --no-immutable
 
       - name: Build the Widget
         run: |
-          echo "INFO: Building the widget..."
-          CI=true yarn build:widget
+          yarn build:widget
 
-          # We want to view the contents of the dist folder and specifically the contents of dist/js/1fe-bundle.js
-          echo "INFO: Contents of dist folder:"
-          ls -la dist
-          echo "INFO: Contents of dist/js:"
-          ls -la dist/js
-          echo "INFO: Contents of dist/js/1fe-bundle.js:"
-          cat dist/js/1fe-bundle.js || echo "1fe-bundle.js does not exist or is empty"
-
-      - name: Upload widget to Akamai NetStorage via rsync
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-        env:
-          AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+      - name: Local package version update
         run: |
-          set -e
-          
-          # ----- SSH Key Setup -----
-          echo "INFO: Setting up SSH key for Akamai NetStorage upload..."
-          SSH_KEY_PATH="$HOME/key.pem"
-          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
-          chmod 600 "$SSH_KEY_PATH"
-          # ----- End SSH Key Setup -----
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            npm version prepatch --no-git-tag-version --preid "${GITHUB_SHA::7}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            npm version patch --no-git-tag-version
+          fi
 
-          # --- Define Paths for Relative Upload ---
-          local_source_dir="dist"
-          staging_dir="staging_for_rsync"
-          relative_path_to_create="integration/widgets/$widgetId/$nextVersion"
-          # The remote base directory is the default landing directory for the sshacs user
-          remote_base_dir="" 
+      - name: Set config env variables
+        run: |
+          echo "widgetId=$(npm pkg get name | tr -d '"')" >> $GITHUB_ENV
+          echo "nextVersion=$(npm pkg get version | tr -d '"')" >> $GITHUB_ENV
 
-          echo "--- Upload Configuration ---"
-          echo "Source (local): '$local_source_dir/'"
-          echo "Relative Path to Create: '$relative_path_to_create'"
-
-          # --- Step 1: Prepare local staging area ---
-          echo "INFO: Preparing local staging directory..."
-          full_staging_path="$staging_dir/$relative_path_to_create"
-          mkdir -p "$full_staging_path"
-          cp -a "$local_source_dir/." "$full_staging_path/"
-          
-          # --- Step 2: Upload using rsync -R (relative) and -O (omit-dir-times) ---
-          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
-          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
-
-          cd "$staging_dir"
-          rsync_source="integration/"
-          
-          echo "INFO: Starting rsync with -R (relative) and -O (omit-dir-times) options..."
-          
-          # Added the -O flag to -avvR to prevent timestamp errors on directories
-          rsync -avvRO \
-            -e "ssh $SSH_OPTS" \
-            "$rsync_source" \
-            "$REMOTE_HOST:$remote_base_dir"
-            
-          cd ..
-          
-          # --- Step 3: Cleanup ---
-          echo "INFO: Cleaning up local staging directory..."
-          rm -rf "$staging_dir"
-          
-          echo "INFO: Upload successful and complete."
-          shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
+      - name: Upload widget to Storage
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az storage blob upload-batch \
+              --source "${{ github.workspace }}/dist" \
+              --destination "widgets/integration/${{ env.widgetId }}/${{ env.nextVersion }}" \
+              --sas-token "${{ secrets.AZURE_STORAGE_SAS_TOKEN }}" \
+              --account-name "1festarter"
 
   validate:
     name: Validate
@@ -186,8 +94,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-          registry-url: https://registry.npmjs.org/
-          cache: 'yarn'
+          cache: "yarn"
 
       - name: Install Dependencies
         run: |
@@ -218,8 +125,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-          registry-url: https://registry.npmjs.org/
-          cache: 'yarn'
+          cache: "yarn"
 
       - name: Install Dependencies
         run: |
@@ -228,6 +134,30 @@ jobs:
       - name: Contract Test
         run: |
           echo "this is the contract test step"
+
+      - name: Local package version update
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            npm version prepatch --no-git-tag-version --preid "${GITHUB_SHA::7}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            npm version patch --no-git-tag-version
+          fi
+
+      - name: Set config env variables
+        run: |
+          echo "widgetId=$(npm pkg get name | tr -d '"')" >> $GITHUB_ENV
+          echo "nextVersion=$(npm pkg get version | tr -d '"')" >> $GITHUB_ENV
+
+      - name: Update Azure App Configuration
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az appconfig kv set \
+              --key "${{ env.widgetId }}" \
+              --value "$(jq -n -r '{ widgetId: "${{ env.widgetId }}", version: "${{ env.nextVersion }}"}')" \
+              --content-type application/json \
+              --yes \
+              --connection-string "${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}"
 
   e2e-tests:
     name: E2E Tests
@@ -242,7 +172,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           registry-url: https://registry.npmjs.org/
-          cache: 'yarn'
+          cache: "yarn"
 
       - name: Install Dependencies
         run: |
