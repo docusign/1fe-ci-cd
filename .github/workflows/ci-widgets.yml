@@ -74,7 +74,6 @@ jobs:
           WIDGET_ID: ${{ steps.set_vars.outputs.widgetId }}
           NEXT_VERSION: ${{ steps.set_vars.outputs.nextVersion }}
         run: |
-          # Akamai upload script here...
           set -e
           SSH_KEY_PATH="$HOME/key.pem"
           printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
@@ -93,7 +92,6 @@ jobs:
           rm -rf "$staging_dir"
           shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
           
-      # --- CHANGED: Archiving the full environment ---
       - name: Archive Full Environment for Tests
         uses: actions/upload-artifact@v4
         with:
@@ -103,11 +101,10 @@ jobs:
             !node_modules/.cache
             !**/.git
             !**/.github
-      
+
       - name: Commit, Tag and Push Version
         if: github.ref_name == inputs.base-branch
         run: |
-          # Commit and push script here...
           set -e
           VERSION="${{ steps.set_vars.outputs.nextVersion }}"
           WIDGET_NAME="${{ steps.set_vars.outputs.widgetId }}"
@@ -120,7 +117,6 @@ jobs:
           git tag -a "$VERSION" -m "New release: $VERSION"
           git push origin "HEAD:${{ inputs.base-branch }}" --follow-tags --no-verify
 
-  # ------ PARALLEL PRE-RELEASE TESTING STAGES ------
   lint-test:
     name: Lint Test
     runs-on: ubuntu-latest
@@ -173,9 +169,6 @@ jobs:
       - name: Run Playwright tests
         run: npx playwright test
 
-  # ------ FULL DEPLOYMENT PIPELINE (BASE BRANCH ONLY) ------
-  # (The rest of the file is unchanged)
-
   release-integration:
     name: Release to Integration
     needs: [build, lint-test, unit-test, contract-test, playwright-test]
@@ -201,11 +194,10 @@ jobs:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: full-test-environment # Download the same full artifact
+          name: full-test-environment
           path: .
       - name: Upload to Akamai (Production)
         run: |
-          # Production Akamai upload script here...
           set -e
           SSH_KEY_PATH="$HOME/key.pem"
           printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
@@ -233,11 +225,19 @@ jobs:
       - name: Run production smoke tests
         run: echo "Running post-upload tests on production..." # TODO: Add tests
 
-  release-production:
-    name: Release to Production
-    needs: [build, test-production]
+  approve-production-release:
+    name: Approve Production Release
+    runs-on: ubuntu-latest
+    needs: test-production
     if: github.ref_name == inputs.base-branch
     environment: production-release
+    steps:
+      - run: echo "Production release approved."
+
+  release-production:
+    name: Release to Production
+    needs: [build, approve-production-release]
+    if: github.ref_name == inputs.base-branch
     uses: ./.github/workflows/reusable-update-azure-config.yml
     with:
       environment: production
