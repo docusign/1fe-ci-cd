@@ -239,12 +239,21 @@ jobs:
     steps:
       - name: Run production smoke tests
         run: echo "Running post-upload tests on production..." # TODO: Add tests
+  
+  approve-production-release:
+    name: Approve Production Release
+    runs-on: ubuntu-latest
+    needs: test-production
+    if: github.ref_name == inputs.base-branch
+    environment: production-release 
+    steps:
+      - name: Approval step
+        run: echo "Production release has been approved."
 
   release-production:
     name: Release to Production
-    needs: [build, test-production]
+    needs: [build, approve-production-release]
     if: github.ref_name == inputs.base-branch
-    environment: production-release
     uses: ./.github/workflows/reusable-update-azure-config.yml
     with:
       environment: production
