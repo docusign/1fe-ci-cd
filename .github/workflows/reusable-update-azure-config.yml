@@ -1,0 +1,32 @@
+name: Reusable - Update Azure App Configuration
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "The target environment name (e.g., integration, production)"
+        required: true
+        type: string
+      widgetId:
+        required: true
+        type: string
+      nextVersion:
+        required: true
+        type: string
+    secrets:
+      AZURE_APP_CONFIG_CONNECTION_STRING:
+        required: true
+jobs:
+  update-config:
+    name: Update Azure App Config for ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set configuration value
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az appconfig kv set \
+              --key "${{ inputs.environment }}:${{ inputs.widgetId }}" \
+              --value "$(jq -n -r '{ "widgetId": "${{ inputs.widgetId }}", "version": "${{ inputs.nextVersion }}" }')" \
+              --content-type application/json \
+              --yes \
+              --connection-string "${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}"
