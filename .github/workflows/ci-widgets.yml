@@ -16,6 +16,7 @@ on:
         type: string
         default: "main"
     secrets:
+      # These are required for the current dependency installation method
       PRIVATE_KEY_FOR_1FE:
         required: true
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
@@ -24,6 +25,10 @@ on:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
         required: true
+      # This secret is for the disabled commit-back feature. It's not used right now.
+      GH_PAT:
+        description: "A GitHub PAT with repo scope from a service account"
+        required: false # Set to false temporarily
 
 jobs:
   build:
@@ -35,20 +40,22 @@ jobs:
     steps:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-      - name: Configure Git
+        # TODO: When GH_PAT is ready, uncomment the 'with' block below
+        # with:
+        #   token: ${{ secrets.GH_PAT }}
+        #   fetch-depth: 0
+      - name: Configure Git User
         run: |
           git config --global user.email "DevOpsTeam@docusign.com"
           git config --global user.name "svc-git-devops"
+
       - name: Set up dependency SSH keys
         uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: |
             ${{ secrets.PRIVATE_KEY_FOR_1FE }}
             ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
-      - name: Setup Node.js and Cache Dependencies
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
@@ -100,24 +107,21 @@ jobs:
         with:
           name: widget-build
           path: ./dist
-          
-      - name: Commit, Tag and Push Version
-        if: github.ref_name == inputs.base-branch
-        run: |
-          # Commit and push script here...
-          set -e
-          VERSION="${{ steps.set_vars.outputs.nextVersion }}"
-          WIDGET_NAME="${{ steps.set_vars.outputs.widgetId }}"
-          INTEGRATION_CDN_URL="https://1fe-a.akamaihd.net/integration/widgets"
-          PREVIEW_URL="https://demo.1fe.com/bathtub"
-          BUNDLE_URL="${INTEGRATION_CDN_URL}/${WIDGET_NAME}/${VERSION}/js/1fe-bundle.js"
-          COMMIT_MSG="Bundle will be uploaded to: ${BUNDLE_URL} / Preview here: ${PREVIEW_URL}?widgetUrl=${BUNDLE_URL}&fixPreview=true [skip ci]"
-          git add package.json
-          git commit --amend -m "$COMMIT_MSG"
-          git tag -a "$VERSION" -m "New release: $VERSION"
-          git push origin "HEAD:${{ inputs.base-branch }}" --follow-tags --no-verify
+      
+      # TODO: When GH_PAT is ready, uncomment this entire step to re-enable the commit-back feature.
+      # - name: Commit, Tag and Push Version
+      #   if: github.ref_name == inputs.base-branch
+      #   uses: stefanzweifel/git-auto-commit-action@v5
+      #   with:
+      #     file_pattern: 'package.json'
+      #     commit_message: "Bundle will be uploaded to: https://1fe-a.akamaihd.net/integration/widgets/${{ steps.set_vars.outputs.widgetId }}/${{ steps.set_vars.outputs.nextVersion }}/js/1fe-bundle.js / Preview here: https://demo.1fe.com/bathtub?widgetUrl=https://1fe-a.akamaihd.net/integration/widgets/${{ steps.set_vars.outputs.widgetId }}/${{ steps.set_vars.outputs.nextVersion }}/js/1fe-bundle.js&fixPreview=true [skip ci]"
+      #     commit_user_name: svc-git-devops
+      #     commit_user_email: DevOpsTeam@docusign.com
+      #     commit_options: '--amend --no-verify'
+      #     tagging_message: ${{ steps.set_vars.outputs.nextVersion }}
+      #     push_options: '--follow-tags'
 
-  # --- CORRECTED: All test jobs use checkout + caching for maximum performance ---
+  # ------ All test jobs below must use the same dependency install method as the build job ------
   lint-test:
     name: Lint Test
     runs-on: ubuntu-latest
@@ -126,7 +130,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Setup Node.js and Cache Dependencies
+      - name: Set up dependency SSH keys
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: |
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
@@ -144,7 +154,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Setup Node.js and Cache Dependencies
+      - name: Set up dependency SSH keys
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: |
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
@@ -162,7 +178,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Setup Node.js and Cache Dependencies
+      - name: Set up dependency SSH keys
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: |
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
@@ -170,7 +192,7 @@ jobs:
       - name: Install Dependencies
         run: yarn install --no-immutable
       - name: Run Contract Tests
-        run: echo "Running contract tests..." # TODO: Add commands
+        run: echo "Running contract tests..."
 
   playwright-test:
     name: Playwright E2E Test
@@ -180,7 +202,13 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-      - name: Setup Node.js and Cache Dependencies
+      - name: Set up dependency SSH keys
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: |
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
@@ -215,7 +243,6 @@ jobs:
       WIDGET_ID: ${{ needs.build.outputs.widgetId }}
       NEXT_VERSION: ${{ needs.build.outputs.nextVersion }}
     steps:
-      # --- CORRECTED: Download only the small 'dist' artifact ---
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -249,7 +276,7 @@ jobs:
     if: github.ref_name == inputs.base-branch
     steps:
       - name: Run production smoke tests
-        run: echo "Running post-upload tests on production..." # TODO: Add tests
+        run: echo "Running post-upload tests on production..."
 
   approve-production-release:
     name: Approve Production Release
