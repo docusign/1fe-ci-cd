@@ -36,7 +36,7 @@ jobs:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Required for amending and tagging
+          fetch-depth: 0
       - name: Configure Git User
         run: |
           git config --global user.email "DevOpsTeam@docusign.com"
@@ -85,7 +85,6 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           file_pattern: 'package.json'
-          # The [skip ci] at the end prevents infinite loops
           commit_message: "Bundle will be uploaded to: https://1fe-a.akamaihd.net/integration/widgets/${{ steps.set_vars.outputs.widgetId }}/${{ steps.set_vars.outputs.nextVersion }}/js/1fe-bundle.js / Preview here: https://demo.1fe.com/bathtub?widgetUrl=https://1fe-a.akamaihd.net/integration/widgets/${{ steps.set_vars.outputs.widgetId }}/${{ steps.set_vars.outputs.nextVersion }}/js/1fe-bundle.js&fixPreview=true [skip ci]"
           commit_user_name: svc-git-devops
           commit_user_email: DevOpsTeam@docusign.com
@@ -220,24 +219,7 @@ jobs:
           path: ./dist
       - name: Upload to Akamai (Production)
         run: |
-          # Production Akamai upload script here...
-          set -e
-          SSH_KEY_PATH="$HOME/key.pem"
-          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
-          chmod 600 "$SSH_KEY_PATH"
-          local_source_dir="dist"
-          staging_dir="staging_for_rsync"
-          relative_path_to_create="production/widgets/$WIDGET_ID/$NEXT_VERSION"
-          full_staging_path="$staging_dir/$relative_path_to_create"
-          mkdir -p "$full_staging_path"
-          cp -a "$local_source_dir/." "$full_staging_path/"
-          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
-          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
-          cd "$staging_dir"
-          rsync -avvRO -e "ssh $SSH_OPTS" "production/" "$REMOTE_HOST:"
-          cd ..
-          rm -rf "$staging_dir"
-          shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
+          set -e; SSH_KEY_PATH="$HOME/key.pem"; printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"; chmod 600 "$SSH_KEY_PATH"; local_source_dir="dist"; staging_dir="staging_for_rsync"; relative_path_to_create="production/widgets/$WIDGET_ID/$NEXT_VERSION"; full_staging_path="$staging_dir/$relative_path_to_create"; mkdir -p "$full_staging_path"; cp -a "$local_source_dir/." "$full_staging_path/"; REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"; SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"; cd "$staging_dir"; rsync -avvRO -e "ssh $SSH_OPTS" "production/" "$REMOTE_HOST:"; cd ..; rm -rf "$staging_dir"; shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
 
   test-production:
     name: Test Production
