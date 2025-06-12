@@ -107,14 +107,15 @@ jobs:
           echo "Amending commit"
           git commit --amend --no-verify -m "$COMMIT_MSG" || echo "Nothing to amend"
 
-          echo "⬇Fetching latest main"
+          echo "Fetching latest main"
           git fetch origin ${{ github.ref_name }}
 
-          echo "Rebasing on top of latest main"
-          git rebase origin/${{ github.ref_name }} || {
-            echo "Rebase failed. Forcing overwrite since CI is source of truth."
+          echo "Attempting rebase on top of latest main"
+          if ! git rebase origin/${{ github.ref_name }}; then
+            echo "Rebase failed, aborting rebase to keep pipeline changes intact"
             git rebase --abort
-          }
+            echo "Rebase aborted, will force push to overwrite remote (CI is source of truth)"
+          fi
 
           echo "Tagging version $VERSION"
           if git tag -a "$VERSION" -m "Release: $VERSION" 2>/dev/null; then
