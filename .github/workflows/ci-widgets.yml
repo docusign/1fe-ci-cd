@@ -36,7 +36,7 @@ jobs:
       - name: Checkout Caller's Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Required for amending and tagging
       - name: Configure Git User
         run: |
           git config --global user.email "DevOpsTeam@docusign.com"
@@ -80,17 +80,38 @@ jobs:
         with:
           name: widget-build
           path: ./dist
-      - name: Commit, Tag and Push Version
-        if: github.ref_name == inputs.base-branch
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          file_pattern: 'package.json'
-          commit_message: "Bundle will be uploaded to: https://1fe-a.akamaihd.net/integration/widgets/${{ steps.set_vars.outputs.widgetId }}/${{ steps.set_vars.outputs.nextVersion }}/js/1fe-bundle.js / Preview here: https://demo.1fe.com/bathtub?widgetUrl=https://1fe-a.akamaihd.net/integration/widgets/${{ steps.set_vars.outputs.widgetId }}/${{ steps.set_vars.outputs.nextVersion }}/js/1fe-bundle.js&fixPreview=true [skip ci]"
-          commit_user_name: svc-git-devops
-          commit_user_email: DevOpsTeam@docusign.com
-          commit_options: '--amend --no-verify'
-          tagging_message: ${{ steps.set_vars.outputs.nextVersion }}
-          push_options: '--follow-tags'
+
+      - name: Attempt to Commit, Tag, and Push
+        run: |
+          # This is the exact script from our main pipeline
+          set -e
+
+          # 1. Configure the user identity for the commit
+          git config --global user.email "DevOpsTeam@docusign.com"
+          git config --global user.name "svc-git-devops"
+          
+          # 2. Prepare variables for the commit message
+          VERSION="${{ steps.set_vars.outputs.nextVersion }}"
+          WIDGET_NAME="${{ steps.set_vars.outputs.widgetId }}"
+          INTEGRATION_CDN_URL="https://1fe-a.akamaihd.net/integration/widgets"
+          PREVIEW_URL="https://demo.1fe.com/bathtub"
+          BUNDLE_URL="${INTEGRATION_CDN_URL}/${WIDGET_NAME}/${VERSION}/js/1fe-bundle.js"
+          
+          # 3. Construct the exact commit message
+          COMMIT_MSG="Bundle will be uploaded to: ${BUNDLE_URL} / Preview here: ${PREVIEW_URL}?widgetUrl=${BUNDLE_URL}&fixPreview=true [skip ci]"
+
+          # 4. Stage the modified package.json
+          git add package.json
+          
+          # 5. Amend the commit with the new message
+          git commit --amend -m "$COMMIT_MSG"
+          
+          # 6. Create the annotated tag
+          git tag -a "$VERSION" -m "New release: $VERSION"
+          
+          # 7. Attempt to push the changes (This step will fail)
+          echo "Attempting to push amended commit and tag..."
+          git push origin "HEAD:${{ github.ref_name }}" --follow-tags --no-verify
 
   lint-test:
     name: Lint Test
@@ -219,7 +240,24 @@ jobs:
           path: ./dist
       - name: Upload to Akamai (Production)
         run: |
-          set -e; SSH_KEY_PATH="$HOME/key.pem"; printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"; chmod 600 "$SSH_KEY_PATH"; local_source_dir="dist"; staging_dir="staging_for_rsync"; relative_path_to_create="production/widgets/$WIDGET_ID/$NEXT_VERSION"; full_staging_path="$staging_dir/$relative_path_to_create"; mkdir -p "$full_staging_path"; cp -a "$local_source_dir/." "$full_staging_path/"; REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"; SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"; cd "$staging_dir"; rsync -avvRO -e "ssh $SSH_OPTS" "production/" "$REMOTE_HOST:"; cd ..; rm -rf "$staging_dir"; shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
+          # Production Akamai upload script here...
+          set -e
+          SSH_KEY_PATH="$HOME/key.pem"
+          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
+          chmod 600 "$SSH_KEY_PATH"
+          local_source_dir="dist"
+          staging_dir="staging_for_rsync"
+          relative_path_to_create="production/widgets/$WIDGET_ID/$NEXT_VERSION"
+          full_staging_path="$staging_dir/$relative_path_to_create"
+          mkdir -p "$full_staging_path"
+          cp -a "$local_source_dir/." "$full_staging_path/"
+          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
+          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
+          cd "$staging_dir"
+          rsync -avvRO -e "ssh $SSH_OPTS" "production/" "$REMOTE_HOST:"
+          cd ..
+          rm -rf "$staging_dir"
+          shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
 
   test-production:
     name: Test Production
