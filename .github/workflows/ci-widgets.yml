@@ -110,22 +110,19 @@ jobs:
           echo "Fetching latest main"
           git fetch origin ${{ github.ref_name }}
 
-          echo "Attempting rebase on top of latest main"
-          if ! git rebase origin/${{ github.ref_name }}; then
-            echo "Rebase failed, aborting rebase to keep pipeline changes intact"
-            git rebase --abort
-            echo "Rebase aborted, will force push to overwrite remote (CI is source of truth)"
-          fi
+          echo "Force resetting local branch to HEAD (pipeline commit)"
+          git reset --hard HEAD
+
+          echo "Force pushing pipeline commit to remote (CI is source of truth)"
+          git push origin HEAD:${{ github.ref_name }} --force-with-lease --follow-tags --no-verify
 
           echo "Tagging version $VERSION"
           if git tag -a "$VERSION" -m "Release: $VERSION" 2>/dev/null; then
             echo "Tag created"
+            git push origin "$VERSION" --force
           else
-            echo "ℹTag $VERSION already exists. Skipping..."
+            echo "Tag $VERSION already exists. Skipping tag push..."
           fi
-
-          echo "Force pushing with tags (CI is source of truth)"
-          git push origin HEAD:${{ github.ref_name }} --force-with-lease --follow-tags --no-verify
 
   lint-test:
     name: Lint Test
