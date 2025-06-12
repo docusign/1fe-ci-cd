@@ -81,40 +81,57 @@ jobs:
           name: widget-build
           path: ./dist
 
-      - name: Attempt to Commit, Tag, and Push
+      - name: Commit, Tag, and Push Updated Version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # This is the exact script from our main pipeline
-          set -e
+          set -euo pipefail
 
-          # 1. Configure the user identity for the commit
-          git config --global user.email "DevOpsTeam@docusign.com"
-          git config --global user.name "svc-git-devops"
-          
-          # 2. Prepare variables for the commit message
           VERSION="${{ steps.set_vars.outputs.nextVersion }}"
           WIDGET_NAME="${{ steps.set_vars.outputs.widgetId }}"
           INTEGRATION_CDN_URL="https://1fe-a.akamaihd.net/integration/widgets"
           PREVIEW_URL="https://demo.1fe.com/bathtub"
           BUNDLE_URL="${INTEGRATION_CDN_URL}/${WIDGET_NAME}/${VERSION}/js/1fe-bundle.js"
-          
-          # 3. Construct the exact commit message
           COMMIT_MSG="Bundle will be uploaded to: ${BUNDLE_URL} / Preview here: ${PREVIEW_URL}?widgetUrl=${BUNDLE_URL}&fixPreview=true [skip ci]"
 
-          # 4. Stage the modified package.json
-          git add package.json
-          
-          # 5. Amend the commit with the new message
-          git commit --amend -m "$COMMIT_MSG"
-          
-          # 6. Create the annotated tag
-          git tag -a "$VERSION" -m "New release: $VERSION"
-          
-          # 7. Push using GitHub Token
-          echo "Rewriting remote to use GitHub Token..."
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          echo "Setting up Git identity"
+          git config user.email "DevOpsTeam@docusign.com"
+          git config user.name "svc-git-devops"
 
-          echo "Attempting to push amended commit and tag..."
-          git push origin "HEAD:${{ github.ref_name }}" --follow-tags --no-verify
+          echo "Staging changes"
+          git add package.json
+
+          echo "Amending commit with new message"
+          git commit --amend --no-verify -m "$COMMIT_MSG" || {
+            echo "Nothing to amend. Exiting early."
+            exit 0
+          }
+
+          echo "Fetching and merging remote changes to prevent non-fast-forward errors"
+          git fetch origin ${{ github.ref_name }}
+          git merge origin/${{ github.ref_name }} --no-edit --commit || {
+            echo "Merge conflict or failure. Exiting..."
+            exit 1
+          }
+
+          echo "Tagging new version: $VERSION"
+          if git tag -a "$VERSION" -m "New release: $VERSION" 2>/dev/null; then
+            echo "Tag $VERSION created"
+          else
+            echo "Tag $VERSION already exists. Please update package.json to a new version."
+            exit 1
+          fi
+
+          echo "Updating remote to use GITHUB_TOKEN"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+
+          echo "Pushing changes and tag"
+          git push origin HEAD:${{ github.ref_name }} --follow-tags --no-verify || {
+            echo "Git push failed. Try resolving with rebase or conflict fix."
+            exit 1
+          }
+
+          echo "Push complete"
 
   lint-test:
     name: Lint Test
