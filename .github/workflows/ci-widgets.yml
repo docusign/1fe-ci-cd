@@ -109,7 +109,10 @@ jobs:
           # 6. Create the annotated tag
           git tag -a "$VERSION" -m "New release: $VERSION"
           
-          # 7. Attempt to push the changes (This step will fail)
+          # 7. Push using GitHub Token
+          echo "Rewriting remote to use GitHub Token..."
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+
           echo "Attempting to push amended commit and tag..."
           git push origin "HEAD:${{ github.ref_name }}" --follow-tags --no-verify
 
