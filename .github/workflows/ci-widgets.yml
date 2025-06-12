@@ -98,21 +98,26 @@ jobs:
           git config user.email "DevOpsTeam@docusign.com"
           git config user.name "svc-git-devops"
 
+          echo "Updating remote to use GITHUB_TOKEN"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+
           echo "Staging changes"
           git add package.json
 
           echo "Amending commit with new message"
-          git commit --amend --no-verify -m "$COMMIT_MSG" || {
+          if git commit --amend --no-verify -m "$COMMIT_MSG"; then
+            echo "Commit amended"
+          else
             echo "Nothing to amend. Exiting early."
             exit 0
-          }
+          fi
 
           echo "Fetching and merging remote changes to prevent non-fast-forward errors"
           git fetch origin ${{ github.ref_name }}
-          git merge origin/${{ github.ref_name }} --no-edit --commit || {
+          if ! git merge origin/${{ github.ref_name }} --no-edit --commit; then
             echo "Merge conflict or failure. Exiting..."
             exit 1
-          }
+          fi
 
           echo "Tagging new version: $VERSION"
           if git tag -a "$VERSION" -m "New release: $VERSION" 2>/dev/null; then
@@ -122,17 +127,13 @@ jobs:
             exit 1
           fi
 
-          echo "Updating remote to use GITHUB_TOKEN"
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
-
           echo "Pushing changes and tag"
-          git push origin HEAD:${{ github.ref_name }} --follow-tags --no-verify || {
+          if git push origin HEAD:${{ github.ref_name }} --follow-tags --no-verify; then
+            echo "Push complete"
+          else
             echo "Git push failed. Try resolving with rebase or conflict fix."
             exit 1
-          }
-
-          echo "Push complete"
-
+          fi
   lint-test:
     name: Lint Test
     runs-on: ubuntu-latest
