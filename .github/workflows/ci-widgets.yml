@@ -81,7 +81,7 @@ jobs:
           name: widget-build
           path: ./dist
 
-      - name: Commit, Tag, and Push Updated Version
+      - name: Commit, Tag, and Push Updated Version (CI is Source of Truth)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -98,42 +98,34 @@ jobs:
           git config user.email "DevOpsTeam@docusign.com"
           git config user.name "svc-git-devops"
 
-          echo "Updating remote to use GITHUB_TOKEN"
+          echo "Updating origin to use GITHUB_TOKEN"
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
 
-          echo "Staging changes"
+          echo "Staging files"
           git add package.json
 
-          echo "Amending commit with new message"
-          if git commit --amend --no-verify -m "$COMMIT_MSG"; then
-            echo "Commit amended"
-          else
-            echo "Nothing to amend. Exiting early."
-            exit 0
-          fi
+          echo "Amending commit"
+          git commit --amend --no-verify -m "$COMMIT_MSG" || echo "Nothing to amend"
 
-          echo "Fetching and merging remote changes to prevent non-fast-forward errors"
+          echo "⬇Fetching latest main"
           git fetch origin ${{ github.ref_name }}
-          if ! git merge origin/${{ github.ref_name }} --no-edit --commit; then
-            echo "Merge conflict or failure. Exiting..."
-            exit 1
+
+          echo "Rebasing on top of latest main"
+          git rebase origin/${{ github.ref_name }} || {
+            echo "Rebase failed. Forcing overwrite since CI is source of truth."
+            git rebase --abort
+          }
+
+          echo "Tagging version $VERSION"
+          if git tag -a "$VERSION" -m "Release: $VERSION" 2>/dev/null; then
+            echo "Tag created"
+          else
+            echo "ℹTag $VERSION already exists. Skipping..."
           fi
 
-          echo "Tagging new version: $VERSION"
-          if git tag -a "$VERSION" -m "New release: $VERSION" 2>/dev/null; then
-            echo "Tag $VERSION created"
-          else
-            echo "Tag $VERSION already exists. Please update package.json to a new version."
-            exit 1
-          fi
+          echo "Force pushing with tags (CI is source of truth)"
+          git push origin HEAD:${{ github.ref_name }} --force-with-lease --follow-tags --no-verify
 
-          echo "Pushing changes and tag"
-          if git push origin HEAD:${{ github.ref_name }} --follow-tags --no-verify; then
-            echo "Push complete"
-          else
-            echo "Git push failed. Try resolving with rebase or conflict fix."
-            exit 1
-          fi
   lint-test:
     name: Lint Test
     runs-on: ubuntu-latest
