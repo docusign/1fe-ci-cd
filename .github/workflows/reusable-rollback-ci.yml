@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       environment:
-        description: "The environment to rollback (must be 'integration' or 'production')"
+        description: "The environment to rollback (e.g., integration or production)"
         required: true
         type: string
       caller-repo-ref:
@@ -83,7 +83,7 @@ jobs:
 
       - name: Update Azure App Config
         if: ${{ steps.check_cdn.outputs.asset_exists == 'true' }}
-        uses: ./.github/workflows/reusable-update-azure-config.yml
+        uses: docusign/1fe-ci-cd/.github/workflows/reusable-update-azure-config.yml@main
         with:
           environment: ${{ inputs.environment }}
           widgetId: ${{ steps.get_widget_id.outputs.widgetId }}
