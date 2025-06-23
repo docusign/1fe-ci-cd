@@ -221,6 +221,8 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
       - name: Run Playwright tests
+        env: 
+          WIDGET_VERSION: ${{ needs.build.outputs.nextVersion }} 
         run: npx playwright test
 
   release-integration:
