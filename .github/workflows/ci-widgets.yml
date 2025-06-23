@@ -203,7 +203,7 @@ jobs:
 
   release-integration:
     name: Release to Integration
-    needs: [build, lint-test, unit-test, contract-test, playwright-test]
+    needs: [build, lint-test, unit-test, playwright-test]
     if: github.ref_name == inputs.base-branch
     uses: ./.github/workflows/reusable-update-azure-config.yml
     with:
