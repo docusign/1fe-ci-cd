@@ -1,0 +1,104 @@
+name: Reusable Widget Rollback CI
+permissions:
+  contents: read # We only need to read the package.json, not write to the repo
+  id-token: write # Required for OIDC authentication if reusable-update-azure-config uses it
+
+on:
+  workflow_call:
+    inputs:
+      target-version:
+        description: "The specific version to roll back to (e.g., 1.0.3 or 1.0.3-PR-123.abcde12)"
+        required: true
+        type: string
+      environment:
+        description: "The environment to rollback (e.g., integration or production). Valid values: integration, production."
+        required: true
+        type: string
+      caller-repo-ref:
+        description: "The Git ref (branch, tag, or SHA) of the caller repository to checkout."
+        required: true
+        type: string
+      caller-repo:
+        description: "The full name (owner/repo-name) of the caller repository to checkout."
+        required: true
+        type: string
+    secrets:
+      AZURE_APP_CONFIG_CONNECTION_STRING:
+        required: true
+
+jobs:
+  # This job performs the checks and outputs necessary data
+  check-and-prepare-rollback:
+    name: Check Asset and Prepare Data
+    runs-on: ubuntu-latest
+    outputs: # Define outputs for this job
+      widgetId: ${{ steps.get_widget_id.outputs.widgetId }}
+      targetVersion: ${{ inputs.target-version }} # Pass input directly as output
+      environment: ${{ inputs.environment }}      # Pass input directly as output
+      assetExists: ${{ steps.check_cdn.outputs.asset_exists }}
+    steps:
+      - name: Checkout Caller's Code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.caller-repo }}
+          ref: ${{ inputs.caller-repo-ref }}
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "yarn"
+
+      - name: Get Widget ID from package.json
+        id: get_widget_id
+        run: |
+          echo "widgetId=$(npm pkg get name | tr -d '"')" >> $GITHUB_OUTPUT
+
+      - name: Construct CDN URL and Check Asset Existence
+        id: check_cdn
+        env:
+          WIDGET_ID: ${{ steps.get_widget_id.outputs.widgetId }}
+          TARGET_VERSION: ${{ inputs.target-version }}
+        run: |
+          CDN_BASE_URL="https://1fe-a.akamaihd.net"
+          # Determine the CDN path based on the environment
+          if [[ "${{ inputs.environment }}" == "integration" ]]; then
+            CDN_PATH="integration"
+          elif [[ "${{ inputs.environment }}" == "production" ]]; then
+            CDN_PATH="production"
+          else
+            echo "Error: Invalid environment specified."
+            echo "asset_exists=false" >> $GITHUB_OUTPUT # Ensure output is set even on error
+            exit 1
+          fi
+
+          BUNDLE_URL="${CDN_BASE_URL}/${CDN_PATH}/widgets/$WIDGET_ID/$TARGET_VERSION/js/1fe-bundle.js"
+          echo "Checking CDN for asset: $BUNDLE_URL"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BUNDLE_URL")
+          echo "CDN check returned HTTP Status: $HTTP_STATUS"
+
+          if [[ "$HTTP_STATUS" -eq 200 ]]; then
+            echo "Asset found on CDN. Proceeding with rollback."
+            echo "asset_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Asset NOT found on CDN (HTTP Status: $HTTP_STATUS). Cannot proceed with rollback."
+            echo "asset_exists=false" >> $GITHUB_OUTPUT
+            exit 1 # Fail the job if asset not found
+          fi
+
+  # This new job will call your reusable-update-azure-config.yml
+  update-azure-config-job:
+    name: Call Azure App Config Update
+    needs: check-and-prepare-rollback # Depends on the first job to get its outputs
+    if: ${{ needs.check-and-prepare-rollback.outputs.assetExists == 'true' }} # Only run if asset exists
+
+    # This is where you call the reusable workflow at the job level
+    uses: docusign/1fe-ci-cd/.github/workflows/reusable-update-azure-config.yml@main # Correct path and usage for reusable workflow
+    with:
+      environment: ${{ needs.check-and-prepare-rollback.outputs.environment }}
+      widgetId: ${{ needs.check-and-prepare-rollback.outputs.widgetId }}
+      nextVersion: ${{ needs.check-and-prepare-rollback.outputs.targetVersion }}
+    secrets:
+      AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}
