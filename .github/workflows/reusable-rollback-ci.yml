@@ -33,12 +33,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Caller's Code
-        # Use a separate checkout action to get the caller's repository
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.caller-repo }}
           ref: ${{ inputs.caller-repo-ref }}
-          path: ./caller-repo-code # Checkout into a specific directory
+          path: ./caller-repo-code
           fetch-depth: 1 # Only fetch depth 1 is needed to read package.json
 
       - name: Setup Node.js
