@@ -20,7 +20,7 @@ on:
 
 jobs:
   build:
-    uses: ./.github/workflows/reusable-build-widget.yml
+    uses: ./.github/workflows/reusable-widget-build.yml
     with:
       node-version: ${{ inputs.node-version }}
       base-branch: ${{ inputs.base-branch }}
