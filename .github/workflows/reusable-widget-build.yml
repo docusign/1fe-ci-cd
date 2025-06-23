@@ -1,0 +1,153 @@
+name: Widget Build
+
+permissions:
+  contents: write
+  id-token: write
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to use"
+        required: false
+        type: string
+        default: "22"
+      base-branch:
+        description: "The base branch to commit/tag back to"
+        required: false
+        type: string
+        default: "main"
+    secrets:
+      PRIVATE_KEY_FOR_1FE:
+        required: true
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+        required: true
+      AKAMAI_NS_SSH_PRIVATE_KEY:
+        required: true
+      GITHUB_TOKEN:
+        required: true
+
+jobs:
+  build:
+    name: Build and Commit Version
+    runs-on: ubuntu-latest
+    outputs:
+      widgetId: ${{ steps.set_vars.outputs.widgetId }}
+      nextVersion: ${{ steps.set_vars.outputs.nextVersion }}
+    steps:
+      - name: Checkout Caller's Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for amending and tagging
+
+      - name: Configure Git User
+        run: |
+          git config --global user.email "DevOpsTeam@docusign.com"
+          git config --global user.name "svc-git-devops"
+
+      - name: Set up dependency SSH keys
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: |
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+
+      - name: Install Dependencies
+        run: yarn install --no-immutable
+
+      - name: Build the Widget
+        run: yarn build:widget
+
+      - name: Calculate next version
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            npm version prepatch --no-git-tag-version --preid "PR-${{ github.event.pull_request.number }}.${GITHUB_SHA::7}"
+          elif [[ "${{ github.ref_name }}" == "${{ inputs.base-branch }}" ]]; then
+            npm version patch --no-git-tag-version
+          fi
+
+      - name: Set Widget ID and Version Output
+        id: set_vars
+        run: |
+          echo "widgetId=$(npm pkg get name | tr -d '"')" >> $GITHUB_OUTPUT
+          echo "nextVersion=$(npm pkg get version | tr -d '"')" >> $GITHUB_OUTPUT
+
+      - name: Upload to Akamai (Integration)
+        env:
+          AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+          WIDGET_ID: ${{ steps.set_vars.outputs.widgetId }}
+          NEXT_VERSION: ${{ steps.set_vars.outputs.nextVersion }}
+        run: |
+          set -e
+          SSH_KEY_PATH="$HOME/key.pem"
+          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
+          chmod 600 "$SSH_KEY_PATH"
+          local_source_dir="dist"
+          staging_dir="staging_for_rsync"
+          relative_path_to_create="integration/widgets/$WIDGET_ID/$NEXT_VERSION"
+          full_staging_path="$staging_dir/$relative_path_to_create"
+          mkdir -p "$full_staging_path"
+          cp -a "$local_source_dir/." "$full_staging_path/"
+          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
+          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
+          cd "$staging_dir"
+          rsync -avvRO -e "ssh $SSH_OPTS" "integration/" "$REMOTE_HOST:"
+          cd ..
+          rm -rf "$staging_dir"
+          shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
+
+      - name: Archive build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: widget-build
+          path: ./dist
+
+      - name: Commit, Tag, and Push Updated Version (CI is Source of Truth)
+        if: github.ref_name == inputs.base-branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.set_vars.outputs.nextVersion }}"
+          WIDGET_NAME="${{ steps.set_vars.outputs.widgetId }}"
+          INTEGRATION_CDN_URL="https://1fe-a.akamaihd.net/integration/widgets"
+          PREVIEW_URL="https://demo.1fe.com/bathtub"
+          BUNDLE_URL="${INTEGRATION_CDN_URL}/${WIDGET_NAME}/${VERSION}/js/1fe-bundle.js"
+          COMMIT_MSG="Bundle will be uploaded to: ${BUNDLE_URL} / Preview here: ${PREVIEW_URL}?widgetUrl=${BUNDLE_URL}&fixPreview=true [skip ci]"
+
+          echo "Setting up Git identity"
+          git config user.email "DevOpsTeam@docusign.com"
+          git config user.name "svc-git-devops"
+
+          echo "Updating origin to use GITHUB_TOKEN"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
+
+          echo "Staging files"
+          git add package.json
+
+          echo "Amending commit"
+          git commit --amend --no-verify -m "$COMMIT_MSG" || echo "Nothing to amend"
+
+          echo "Fetching latest main"
+          git fetch origin ${{ github.ref_name }}
+
+          echo "Force resetting local branch to HEAD (pipeline commit)"
+          git reset --hard HEAD
+
+          echo "Force pushing pipeline commit to remote (CI is source of truth)"
+          git push origin HEAD:${{ github.ref_name }} --force-with-lease --follow-tags --no-verify
+
+          echo "Tagging version $VERSION"
+          if git tag -a "$VERSION" -m "Release: $VERSION" 2>/dev/null; then
+            echo "Tag created"
+            git push origin "$VERSION" --force
+          else
+            echo "Tag $VERSION already exists. Skipping tag push..."
+          fi

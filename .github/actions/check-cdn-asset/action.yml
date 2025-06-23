@@ -1,0 +1,54 @@
+name: Check CDN Asset Exists
+
+description: Verifies if a given widget version exists on CDN.
+
+inputs:
+  widgetId:
+    description: "The widget identifier (npm package name)"
+    required: true
+  targetVersion:
+    description: "The widget version to check"
+    required: true
+  environment:
+    description: "The environment to check (integration or production)"
+    required: true
+
+outputs:
+  assetExists:
+    description: "True if the asset exists on CDN, false otherwise"
+    value: ${{ steps.check.outputs.asset_exists }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check CDN for Asset
+      id: check
+      shell: bash
+      env:
+        WIDGET_ID: ${{ inputs.widgetId }}
+        TARGET_VERSION: ${{ inputs.targetVersion }}
+        ENVIRONMENT: ${{ inputs.environment }}
+      run: |
+        CDN_BASE_URL="https://1fe-a.akamaihd.net"
+
+        if [[ "$ENVIRONMENT" == "integration" ]]; then
+          CDN_PATH="integration"
+        elif [[ "$ENVIRONMENT" == "production" ]]; then
+          CDN_PATH="production"
+        else
+          echo "Invalid environment: $ENVIRONMENT"
+          echo "asset_exists=false" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+        BUNDLE_URL="${CDN_BASE_URL}/${CDN_PATH}/widgets/${WIDGET_ID}/${TARGET_VERSION}/js/1fe-bundle.js"
+        echo "Checking CDN for: $BUNDLE_URL"
+
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BUNDLE_URL")
+        echo "CDN response: $HTTP_STATUS"
+
+        if [[ "$HTTP_STATUS" -eq 200 ]]; then
+          echo "asset_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "asset_exists=false" >> $GITHUB_OUTPUT
+        fi

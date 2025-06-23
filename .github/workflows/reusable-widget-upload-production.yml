@@ -1,0 +1,50 @@
+name: Widget Upload Production
+
+on:
+  workflow_call:
+    inputs:
+      widgetId:
+        description: "Widget ID"
+        required: true
+        type: string
+      nextVersion:
+        description: "Next Version"
+        required: true
+        type: string
+    secrets:
+      AKAMAI_NS_SSH_PRIVATE_KEY:
+        required: true
+
+jobs:
+  upload-production:
+    name: Upload to Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: widget-build
+          path: ./dist
+      - name: Upload to Akamai (Production)
+        env:
+          AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+          WIDGET_ID: ${{ inputs.widgetId }}
+          NEXT_VERSION: ${{ inputs.nextVersion }}
+        run: |
+          set -e
+          SSH_KEY_PATH="$HOME/key.pem"
+          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
+          chmod 600 "$SSH_KEY_PATH"
+          local_source_dir="dist"
+          staging_dir="staging_for_rsync"
+          relative_path_to_create="production/widgets/$WIDGET_ID/$NEXT_VERSION"
+          full_staging_path="$staging_dir/$relative_path_to_create"
+          mkdir -p "$full_staging_path"
+          cp -a "$local_source_dir/." "$full_staging_path/"
+          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
+          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
+          cd "$staging_dir"
+          rsync -avvRO -e "ssh $SSH_OPTS" "production/" "$REMOTE_HOST:"
+          cd ..
+          rm -rf "$staging_dir"
+          shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"

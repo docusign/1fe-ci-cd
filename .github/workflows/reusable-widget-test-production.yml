@@ -1,0 +1,12 @@
+name: Widget Test Production
+
+on:
+  workflow_call:
+
+jobs:
+  test-production:
+    name: Test Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run production smoke tests
+        run: echo "Running post-upload tests on production..."

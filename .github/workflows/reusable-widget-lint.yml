@@ -1,0 +1,38 @@
+name: Widget Lint Test
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to use"
+        required: false
+        type: string
+        default: "22"
+    secrets:
+      PRIVATE_KEY_FOR_1FE:
+        required: true
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+        required: true
+
+jobs:
+  lint-test:
+    name: Lint Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Set up dependency SSH keys
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: |
+            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'yarn'
+      - name: Install Dependencies
+        run: yarn install --no-immutable
+      - name: Run Linting
+        run: yarn lint

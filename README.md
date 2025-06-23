@@ -35,3 +35,33 @@ Contributions are welcome! Please open issues or submit pull requests for improv
 ## License
 
 This project is licensed under the MIT License.
+
+# 1FE CI/CD Workflows
+
+This repository contains shared reusable GitHub Actions and workflows for managing 1FE widget lifecycle.
+
+## 📦 Key Components
+
+### ✅ Composite Actions
+- **check-cdn-asset**: Verifies that a widget bundle exists on Akamai CDN before performing rollback.
+
+### 🔁 Reusable Workflows
+- **reusable-rollback-ci.yml**: Used to roll back a widget version, only if the asset exists on CDN.
+- **reusable-update-azure-config.yml**: Updates Azure App Configuration with the widget version.
+
+## 📌 Usage from Caller Repo
+
+### Example: `rollback-widget.yml` in `1fe-widget-starter-kit`
+
+```yaml
+jobs:
+  call-reusable-rollback:
+    uses: docusign/1fe-ci-cd/.github/workflows/reusable-rollback-ci.yml@main
+    with:
+      target-version: ...
+      environment: ...
+      caller-repo: ...
+      caller-repo-ref: ...
+    secrets:
+      AZURE_APP_CONFIG_CONNECTION_STRING: ...
+
