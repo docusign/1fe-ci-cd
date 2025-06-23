@@ -1,0 +1,47 @@
+name: Reusable Widget Tests
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to use"
+        required: false
+        type: string
+        default: "22"
+      nextVersion:
+        description: "Widget version for E2E tests"
+        required: false
+        type: string
+    secrets:
+      PRIVATE_KEY_FOR_1FE:
+        required: true
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+        required: true
+
+jobs:
+  lint:
+    uses: ./.github/workflows/widget-lint-test.yml
+    with:
+      node-version: ${{ inputs.node-version }}
+    secrets:
+      PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+  unit:
+    needs: lint
+    uses: ./.github/workflows/widget-unit-test.yml
+    with:
+      node-version: ${{ inputs.node-version }}
+    secrets:
+      PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+  playwright:
+    needs: unit
+    uses: ./.github/workflows/widget-playwright-e2e-test.yml
+    with:
+      node-version: ${{ inputs.node-version }}
+      nextVersion: ${{ inputs.nextVersion }}
+    secrets:
+      PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
