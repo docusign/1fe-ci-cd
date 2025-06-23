@@ -30,7 +30,7 @@ jobs:
       AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
 
   tests:
-    uses: ./.github/workflows/reusable-tests.yml
+    uses: ./.github/workflows/reusable-widget.yml
     needs: build
     with:
       node-version: ${{ inputs.node-version }}
@@ -52,7 +52,7 @@ jobs:
   upload-production:
     needs: [build, release-integration]
     if: github.ref_name == inputs.base-branch
-    uses: ./.github/workflows/reusable-upload-production.yml
+    uses: ./.github/workflows/reusable-widget-upload-production.yml
     with:
       widgetId: ${{ needs.build.outputs.widgetId }}
       nextVersion: ${{ needs.build.outputs.nextVersion }}
