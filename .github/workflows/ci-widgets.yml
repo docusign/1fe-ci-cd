@@ -82,6 +82,7 @@ jobs:
           path: ./dist
 
       - name: Commit, Tag, and Push Updated Version (CI is Source of Truth)
+        if: github.ref_name == inputs.base-branch 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
