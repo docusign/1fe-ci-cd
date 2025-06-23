@@ -1,11 +1,11 @@
 # 1fe-ci-cd/.github/workflows/reusable-rollback-ci.yml
 name: Reusable Widget Rollback CI
 permissions:
-  contents: read # We only need to read the package.json, not write to the repo
-  id-token: write # Required for OIDC authentication if reusable-update-azure-config uses it
+  contents: read
+  id-token: write
 
 on:
-  workflow_call: # This makes it a reusable workflow
+  workflow_call:
     inputs:
       target-version:
         description: "The specific version to roll back to (e.g., 1.0.3 or 1.0.3-PR-123.abcde12)"
@@ -15,11 +15,11 @@ on:
         description: "The environment to rollback (must be 'integration' or 'production')"
         required: true
         type: string
-      caller-repo-ref: # Input to specify the caller repo's ref (branch, tag, or SHA)
+      caller-repo-ref:
         description: "The Git ref (branch, tag, or SHA) of the caller repository to checkout."
         required: true
         type: string
-      caller-repo: # Input to specify the caller repo name (owner/repo-name)
+      caller-repo:
         description: "The full name (owner/repo-name) of the caller repository to checkout."
         required: true
         type: string
@@ -37,8 +37,7 @@ jobs:
         with:
           repository: ${{ inputs.caller-repo }}
           ref: ${{ inputs.caller-repo-ref }}
-          path: ./caller-repo-code
-          fetch-depth: 1 # Only fetch depth 1 is needed to read package.json
+          fetch-depth: 1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -48,19 +47,16 @@ jobs:
 
       - name: Get Widget ID from package.json
         id: get_widget_id
-        # Now we need to specify the path to the package.json
         run: |
-          cd ./caller-repo-code
           echo "widgetId=$(npm pkg get name | tr -d '"')" >> $GITHUB_OUTPUT
 
       - name: Construct CDN URL and Check Asset Existence
         id: check_cdn
         env:
           WIDGET_ID: ${{ steps.get_widget_id.outputs.widgetId }}
-          TARGET_VERSION: ${{ inputs.target-version }} # Use inputs directly
+          TARGET_VERSION: ${{ inputs.target-version }}
         run: |
           CDN_BASE_URL="https://1fe-a.akamaihd.net"
-          # Determine the CDN path based on the environment
           if [[ "${{ inputs.environment }}" == "integration" ]]; then
             CDN_PATH="integration"
           elif [[ "${{ inputs.environment }}" == "production" ]]; then
@@ -82,12 +78,11 @@ jobs:
           else
             echo "Asset NOT found on CDN (HTTP Status: $HTTP_STATUS). Cannot proceed with rollback."
             echo "asset_exists=false" >> $GITHUB_OUTPUT
-            exit 1 # Fail the job if asset not found
+            exit 1
           fi
 
       - name: Update Azure App Config
         if: ${{ steps.check_cdn.outputs.asset_exists == 'true' }}
-        # The reusable-update-azure-config.yml must also be in the central repo or publicly accessible
         uses: ./.github/workflows/reusable-update-azure-config.yml
         with:
           environment: ${{ inputs.environment }}
