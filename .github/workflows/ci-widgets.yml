@@ -64,6 +64,14 @@ jobs:
     needs: setup
     steps:
       - uses: actions/checkout@v4
+      
+      - name: Setup Node and Install Dependencies
+        uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
       - name: Lint Source Code
         run: yarn lint
 
@@ -73,6 +81,14 @@ jobs:
     needs: setup
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node and Install Dependencies
+        uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+          
       - name: Run Unit Tests
         run: yarn test
 
@@ -82,10 +98,17 @@ jobs:
     needs: setup
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Node and Install Dependencies
+        uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+          
       - name: Run Playwright
         run: |
           echo "Running Playwright for version ${{ needs.setup.outputs.nextVersion }}"
-          yarn test:e2e
+          DEBUG=pw:api npx playwright test 
 
   upload-integration:
     name: Upload to Akamai (Integration)
