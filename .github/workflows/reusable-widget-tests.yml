@@ -28,7 +28,6 @@ jobs:
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
   unit:
-    needs: lint
     uses: ./.github/workflows/reusable-widget-unit-test.yml
     with:
       node-version: ${{ inputs.node-version }}
@@ -37,7 +36,6 @@ jobs:
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
   playwright:
-    needs: unit
     uses: ./.github/workflows/reusable-widget-playwright-test.yml
     with:
       node-version: ${{ inputs.node-version }}
