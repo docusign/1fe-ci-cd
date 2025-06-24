@@ -53,8 +53,8 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
-          private-key-for-1fe: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-          private-key-for-widget-base-config: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
   upload-integration:
     name: Upload to Akamai (Integration)
