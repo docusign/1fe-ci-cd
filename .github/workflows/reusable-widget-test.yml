@@ -1,0 +1,56 @@
+name: Widget Test Jobs
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        required: true
+      widget-version:
+        type: string
+        required: false
+      widget-id:
+        type: string
+        required: false
+    secrets:
+      PRIVATE_KEY_FOR_1FE:
+        required: true
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+        required: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - run: yarn lint
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - run: yarn test
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
+        with:
+          node-version: ${{ inputs.node-version }}
+          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      - run: |
+          echo "Running Playwright for version ${{ inputs.widget-version }}"
+          npx playwright install --with-deps
+          DEBUG=pw:api npx playwright test
