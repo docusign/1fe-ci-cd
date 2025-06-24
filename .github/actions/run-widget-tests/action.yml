@@ -1,0 +1,39 @@
+name: Run Widget Tests
+description: Run unit and Playwright tests for the widget.
+
+inputs:
+  node-version:
+    description: Node.js version to use
+    required: true
+  nextVersion:
+    description: Widget version to test
+    required: true
+  PRIVATE_KEY_FOR_1FE:
+    description: Private key for 1FE auth
+    required: true
+  PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
+    description: Private key for widget base config
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: yarn
+
+    - name: Install dependencies
+      shell: bash
+      run: yarn install --frozen-lockfile
+
+    - name: Run Unit Tests
+      shell: bash
+      run: yarn test
+
+    - name: Run Playwright Tests
+      shell: bash
+      run: |
+        echo "Running Playwright for version ${{ inputs.nextVersion }}"
+        yarn test:e2e
