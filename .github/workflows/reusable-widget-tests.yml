@@ -20,7 +20,7 @@ on:
 
 jobs:
   lint:
-    uses: ./.github/workflows/widget-lint-test.yml
+    uses: ./.github/workflows/reusable-widget-lint-test.yml
     with:
       node-version: ${{ inputs.node-version }}
     secrets:
@@ -29,7 +29,7 @@ jobs:
 
   unit:
     needs: lint
-    uses: ./.github/workflows/widget-unit-test.yml
+    uses: ./.github/workflows/reusable-widget-unit-test.yml
     with:
       node-version: ${{ inputs.node-version }}
     secrets:
@@ -38,7 +38,7 @@ jobs:
 
   playwright:
     needs: unit
-    uses: ./.github/workflows/widget-playwright-e2e-test.yml
+    uses: ./.github/workflows/reusable-widget-playwright-test.yml
     with:
       node-version: ${{ inputs.node-version }}
       nextVersion: ${{ inputs.nextVersion }}
