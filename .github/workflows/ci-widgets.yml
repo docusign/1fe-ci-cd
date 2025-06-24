@@ -120,12 +120,14 @@ jobs:
 
   release-production:
     name: Release to Production
+    runs-on: ubuntu-latest
     needs: [build, approve-production-release]
     if: github.ref_name == inputs.base-branch
-    uses: ./.github/workflows/reusable-update-azure-config.yml # Level 3
-    with:
-      environment: production
-      widgetId: ${{ needs.build.outputs.widgetId }}
-      nextVersion: ${{ needs.build.outputs.nextVersion }}
-    secrets:
-      AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}
+    steps:
+      - name: Update Azure AppConfig
+        uses: ./.github/actions/update-azure-config
+        with:
+          environment: production
+          widgetId: ${{ needs.build.outputs.widgetId }}
+          nextVersion: ${{ needs.build.outputs.nextVersion }}
+          AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}

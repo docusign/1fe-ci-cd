@@ -1,0 +1,31 @@
+# .github/actions/update-azure-config/action.yml
+name: Update Azure App Configuration
+description: Sets the widget version in Azure App Configuration.
+
+inputs:
+  environment:
+    required: true
+    description: "Target environment"
+  widgetId:
+    required: true
+    description: "Widget ID"
+  nextVersion:
+    required: true
+    description: "New version to set"
+  AZURE_APP_CONFIG_CONNECTION_STRING:
+    required: true
+    description: "Connection string"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set configuration value
+      shell: bash
+      run: |
+        echo "Setting AppConfig key: ${{ inputs.environment }}:${{ inputs.widgetId }}"
+        az appconfig kv set \
+          --key "${{ inputs.environment }}:${{ inputs.widgetId }}" \
+          --value "$(jq -n --arg wid '${{ inputs.widgetId }}' --arg ver '${{ inputs.nextVersion }}' '{widgetId: $wid, version: $ver}')" \
+          --content-type application/json \
+          --yes \
+          --connection-string "${{ inputs.AZURE_APP_CONFIG_CONNECTION_STRING }}"
