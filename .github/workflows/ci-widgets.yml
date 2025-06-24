@@ -49,7 +49,7 @@ jobs:
     needs: build
     steps:
       - name: Call Widget Test Suite Composite Action
-        uses: docusign/1fe-ci-cd/.github/actions/widget-tests@main
+        uses: docusign/1fe-ci-cd/.github/actions/run-widget-tests@main
         with:
           node-version: ${{ inputs.node-version }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
