@@ -1,0 +1,60 @@
+# docusign/1fe-ci-cd/.github/actions/widget-upload-akamai/action.yml
+name: 'Widget Upload to Akamai CDN'
+description: 'Downloads build artifact and uploads it to Akamai CDN.'
+
+inputs:
+  widgetId:
+    description: "Widget ID"
+    required: true
+  nextVersion:
+    description: "Next Version"
+    required: true
+  akamai-env-path:
+    description: "Akamai environment path (e.g., integration, production)"
+    required: true
+  akamai-ns-ssh-private-key: # This input will receive the secret from the calling step
+    description: "SSH Private Key for Akamai NS"
+    required: true
+
+runs:
+  using: "composite" # <--- IMPORTANT: This defines it as a composite action
+  steps:
+    - name: Download build artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: widget-build
+        path: ${{ github.workspace }}/dist # Ensure consistent path relative to runner workspace
+
+    - name: Debug Widget ID and Version
+      shell: bash
+      run: |
+        echo "WIDGET_ID='${{ inputs.widgetId }}'"
+        echo "NEXT_VERSION='${{ inputs.nextVersion }}'"
+        echo "AKAMAI_ENV_PATH='${{ inputs.akamai-env-path }}'"
+        ls -R ${{ github.workspace }}/dist
+
+    - name: Upload to Akamai
+      shell: bash
+      env:
+        AKAMAI_NS_SSH_PRIVATE_KEY: ${{ inputs.akamai-ns-ssh-private-key }} # Use input directly
+        WIDGET_ID: ${{ inputs.widgetId }}
+        NEXT_VERSION: ${{ inputs.nextVersion }}
+        AKAMAI_ENV_PATH: ${{ inputs.akamai-env-path }}
+      run: |
+        set -e
+        SSH_KEY_PATH="$HOME/key.pem"
+        printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH";
+        chmod 600 "$SSH_KEY_PATH"
+        local_source_dir="${{ github.workspace }}/dist"
+        staging_dir="staging_for_rsync"
+        relative_path_to_create="${AKAMAI_ENV_PATH}/widgets/$WIDGET_ID/$NEXT_VERSION"
+        full_staging_path="$staging_dir/$relative_path_to_create"
+        mkdir -p "$full_staging_path"
+        cp -a "$local_source_dir/." "$full_staging_path/"
+        REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
+        SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
+        cd "$staging_dir"
+        rsync -avvRO -e "ssh $SSH_OPTS" "${AKAMAI_ENV_PATH}/" "$REMOTE_HOST:"
+        cd ../ # Go back to original directory
+        rm -rf "$staging_dir"
+        shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"

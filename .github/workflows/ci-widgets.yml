@@ -28,60 +28,54 @@ on:
 
 jobs:
   build:
-    # This job now calls the 'reusable-widget-build.yml' workflow
-    uses: ./.github/workflows/reusable-widget-build.yml # Relative path within the same repo
+    uses: ./.github/workflows/reusable-widget-build.yml # Level 3
     with:
       node-version: ${{ inputs.node-version }}
       base-branch: ${{ inputs.base-branch }}
     secrets:
       PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
-      AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
-    # Outputs are implicitly available to dependent jobs via 'needs.build.outputs.<output_name>'
-    # if the called workflow has defined outputs.
-    # reusable-widget-build.yml defines 'widgetId' and 'nextVersion' as outputs.
 
   tests:
-    # This job now calls the 'reusable-widget-tests.yml' workflow
-    uses: ./.github/workflows/reusable-widget-tests.yml # Relative path within the same repo
-    needs: build # Depends on build completing
+    uses: ./.github/workflows/reusable-widget-tests.yml # Level 3
+    needs: build
     with:
       node-version: ${{ inputs.node-version }}
+      nextVersion: ${{ needs.build.outputs.nextVersion }}
     secrets:
       PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
   upload-integration:
-    # This job now calls the 'reusable-widget-upload-akamai.yml' for integration environment
-    uses: ./.github/workflows/reusable-widget-upload-akamai.yml # Relative path within the same repo
+    name: Upload to Akamai (Integration)
+    runs-on: ubuntu-latest # This job needs a runner
     needs: build # Needs build outputs and artifact
     if: github.ref_name == inputs.base-branch
-    with:
-      widgetId: ${{ needs.build.outputs.widgetId }}
-      nextVersion: ${{ needs.build.outputs.nextVersion }}
-      akamai-env-path: "integration" # Specify the Akamai environment for this upload
-    secrets:
-      AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+    steps: # <--- THIS JOB NOW HAS STEPS TO CALL THE COMPOSITE ACTION
+      - name: Call Akamai Upload Composite Action
+        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main # <--- Call the new composite action
+        with:
+          widgetId: ${{ needs.build.outputs.widgetId }}
+          nextVersion: ${{ needs.build.outputs.nextVersion }}
+          akamai-env-path: "integration"
+          akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }} # Pass the secret as an input to the composite action
 
   commit-tag-push:
-    # This job now calls the 'reusable-git-ops.yml' workflow
-    uses: ./.github/workflows/reusable-git-ops.yml # Relative path within the same repo
-    needs: build # Needs build outputs for versioning
-    if: github.ref_name == inputs.base-branch # Only run on base branch
+    uses: ./.github/workflows/reusable-git-ops.yml # Level 3
+    needs: build
+    if: github.ref_name == inputs.base-branch
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Pass GITHUB_TOKEN for pushing
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
       widget-id: ${{ needs.build.outputs.widgetId }}
       next-version: ${{ needs.build.outputs.nextVersion }}
       base-branch: ${{ inputs.base-branch }}
 
-
   release-integration:
     name: Release to Integration
-    # Depends on build, all tests, integration upload, and git ops completing
     needs: [build, tests, upload-integration, commit-tag-push]
     if: github.ref_name == inputs.base-branch
-    uses: ./.github/workflows/reusable-update-azure-config.yml # Relative path within the same repo
+    uses: ./.github/workflows/reusable-update-azure-config.yml # Level 3
     with:
       environment: integration
       widgetId: ${{ needs.build.outputs.widgetId }}
@@ -90,21 +84,23 @@ jobs:
       AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}
 
   upload-production:
-    # This job now calls the 'reusable-widget-upload-akamai.yml' for production environment
-    uses: ./.github/workflows/reusable-widget-upload-akamai.yml # Relative path within the same repo
-    needs: [build, release-integration] # Depends on release-integration ensuring prior steps complete
+    name: Upload to Akamai (Production)
+    runs-on: ubuntu-latest # This job needs a runner
+    needs: [build, release-integration] # Depends on build and integration release
     if: github.ref_name == inputs.base-branch
-    with:
-      widgetId: ${{ needs.build.outputs.widgetId }}
-      nextVersion: ${{ needs.build.outputs.nextVersion }}
-      akamai-env-path: "production" # Specify the Akamai environment for this upload
-    secrets:
-      AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+    steps: # <--- THIS JOB NOW HAS STEPS TO CALL THE COMPOSITE ACTION
+      - name: Call Akamai Upload Composite Action
+        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main # <--- Call the new composite action
+        with:
+          widgetId: ${{ needs.build.outputs.widgetId }}
+          nextVersion: ${{ needs.build.outputs.nextVersion }}
+          akamai-env-path: "production"
+          akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }} # Pass the secret as an input
 
   test-production:
     name: Test Production
     runs-on: ubuntu-latest
-    needs: upload-production # Depends on production upload being complete
+    needs: upload-production
     if: github.ref_name == inputs.base-branch
     steps:
       - name: Run production smoke tests
@@ -115,15 +111,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: test-production
     if: github.ref_name == inputs.base-branch
-    environment: production-release # This will trigger a manual approval
+    environment: production-release
     steps:
       - run: echo "Production release approved."
 
   release-production:
     name: Release to Production
-    needs: [build, approve-production-release] # Depends on build and approval
+    needs: [build, approve-production-release]
     if: github.ref_name == inputs.base-branch
-    uses: ./.github/workflows/reusable-update-azure-config.yml # Relative path within the same repo
+    uses: ./.github/workflows/reusable-update-azure-config.yml # Level 3
     with:
       environment: production
       widgetId: ${{ needs.build.outputs.widgetId }}
