@@ -62,8 +62,6 @@ jobs:
     uses: ./.github/workflows/reusable-git-ops.yml # Call reusable git ops workflow
     needs: build # Needs build outputs for versioning
     if: github.ref_name == inputs.base-branch # Only run on base branch
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Pass GITHUB_TOKEN for pushing
     with:
       widget-id: ${{ needs.build.outputs.widgetId }}
       next-version: ${{ needs.build.outputs.nextVersion }}
