@@ -120,7 +120,7 @@ jobs:
           environment: integration
           widgetId: ${{ needs.build.outputs.widgetId }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
-          azure-app-config-connection-string: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}
+          AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}
 
   upload-production:
     name: Upload to Akamai (Production)
@@ -166,4 +166,4 @@ jobs:
           environment: production
           widgetId: ${{ needs.build.outputs.widgetId }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
-          azure-app-config-connection-string: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}
+          AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}

@@ -87,8 +87,8 @@ runs:
     - name: Prepare Commit Message and Tag
       shell: bash
       env:
-        VERSION: ${{ inputs.next-version }}
-        WIDGET_NAME: ${{ inputs.widget-id }}
+        VERSION: ${{ steps.set_vars.outputs.nextVersion }}
+        WIDGET_NAME: ${{ steps.set_vars.outputs.widgetId }}
         INTEGRATION_CDN_URL: "https://1fe-a.akamaihd.net/integration/widgets"
         PREVIEW_URL: "https://demo.1fe.com/bathtub"
       run: |
