@@ -44,20 +44,6 @@ jobs:
           private-key-for-1fe: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
           private-key-for-widget-base-config: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
-  setup:
-    name: Setup (Yarn, Node)
-    runs-on: ubuntu-latest
-    needs: build
-    outputs:
-      nextVersion: ${{ needs.build.outputs.nextVersion }}
-    steps:
-      - name: Install Deps via Composite Setup Action
-        uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
-        with:
-          node-version: ${{ inputs.node-version }}
-          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
-
   lint:
     name: Run Linting
     runs-on: ubuntu-latest
@@ -108,6 +94,7 @@ jobs:
       - name: Run Playwright
         run: |
           echo "Running Playwright for version ${{ needs.setup.outputs.nextVersion }}"
+          npx playwright install --with-deps
           DEBUG=pw:api npx playwright test 
 
   upload-integration:
@@ -123,20 +110,6 @@ jobs:
           nextVersion: ${{ needs.build.outputs.nextVersion }}
           akamai-env-path: "integration"
           akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
-
-  commit-tag-push:
-    name: Commit, Tag, and Push (Git Ops)
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref_name == inputs.base-branch
-    steps:
-      - name: Call Git Operations Composite Action
-        uses: docusign/1fe-ci-cd/.github/actions/git-ops@main
-        with:
-          widget-id: ${{ needs.build.outputs.widgetId }}
-          next-version: ${{ needs.build.outputs.nextVersion }}
-          base-branch: ${{ inputs.base-branch }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   release-integration:
     name: Release to Integration
