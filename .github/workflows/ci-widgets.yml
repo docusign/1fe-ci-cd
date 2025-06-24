@@ -1,7 +1,7 @@
 # docusign/1fe-ci-cd/.github/workflows/reusable-build-deploy-ci.yml
 name: Reusable Widget Build and Deploy CI
 permissions:
-  contents: write
+  contents: write # Ensure this top-level permission is present for GITHUB_TOKEN
   id-token: write
 on:
   workflow_call:
@@ -53,23 +53,26 @@ jobs:
     if: github.ref_name == inputs.base-branch
     steps: # <--- THIS JOB NOW HAS STEPS TO CALL THE COMPOSITE ACTION
       - name: Call Akamai Upload Composite Action
-        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main # <--- Call the new composite action
+        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main
         with:
           widgetId: ${{ needs.build.outputs.widgetId }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
           akamai-env-path: "integration"
-          akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }} # Pass the secret as an input to the composite action
+          akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
 
   commit-tag-push:
-    uses: ./.github/workflows/reusable-git-ops.yml # Level 3
-    needs: build
-    if: github.ref_name == inputs.base-branch
-    secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    with:
-      widget-id: ${{ needs.build.outputs.widgetId }}
-      next-version: ${{ needs.build.outputs.nextVersion }}
-      base-branch: ${{ inputs.base-branch }}
+    name: Commit, Tag, and Push (Git Ops)
+    runs-on: ubuntu-latest # This job needs a runner
+    needs: build # Needs build outputs for versioning
+    if: github.ref_name == inputs.base-branch # Only run on base branch
+    steps: # <--- THIS JOB NOW HAS STEPS TO CALL THE COMPOSITE ACTION
+      - name: Call Git Operations Composite Action
+        uses: docusign/1fe-ci-cd/.github/actions/git-ops@main # <--- Call the new composite action
+        with:
+          widget-id: ${{ needs.build.outputs.widgetId }}
+          next-version: ${{ needs.build.outputs.nextVersion }}
+          base-branch: ${{ inputs.base-branch }}
+          github-token: ${{ secrets.GITHUB_TOKEN }} # <--- Pass GITHUB_TOKEN as an input
 
   release-integration:
     name: Release to Integration
@@ -85,17 +88,17 @@ jobs:
 
   upload-production:
     name: Upload to Akamai (Production)
-    runs-on: ubuntu-latest # This job needs a runner
-    needs: [build, release-integration] # Depends on build and integration release
+    runs-on: ubuntu-latest
+    needs: [build, release-integration]
     if: github.ref_name == inputs.base-branch
-    steps: # <--- THIS JOB NOW HAS STEPS TO CALL THE COMPOSITE ACTION
+    steps:
       - name: Call Akamai Upload Composite Action
-        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main # <--- Call the new composite action
+        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main
         with:
           widgetId: ${{ needs.build.outputs.widgetId }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
           akamai-env-path: "production"
-          akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }} # Pass the secret as an input
+          akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
 
   test-production:
     name: Test Production
