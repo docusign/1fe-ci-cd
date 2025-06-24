@@ -22,14 +22,11 @@ jobs:
     steps:
       - name: Set configuration value
         uses: azure/cli@v2
-        env:
-          WIDGET_ID: ${{ inputs.widgetId }}
-          NEXT_VERSION: ${{ inputs.nextVersion }}
         with:
           inlineScript: |
             az appconfig kv set \
-              --key "${{ inputs.environment }}:$WIDGET_ID" \
-              --value "$(jq -n --arg wid "$WIDGET_ID" --arg ver "$NEXT_VERSION" '{widgetId: $wid, version: $ver}')" \
+              --key "${{ inputs.environment }}:${{ inputs.widgetId }}" \
+              --value "$(jq -n --arg wid '${{ inputs.widgetId }}' --arg ver '${{ inputs.nextVersion }}' '{widgetId: $wid, version: $ver}')" \
               --content-type application/json \
               --yes \
               --connection-string "${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}"
