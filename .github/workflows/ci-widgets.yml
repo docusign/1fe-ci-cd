@@ -26,8 +26,6 @@ on:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
         required: true
-      GITHUB_TOKEN:
-        required: true
 
 jobs:
   build:
@@ -112,7 +110,6 @@ jobs:
           widget-id: ${{ needs.build.outputs.widgetId }}
           next-version: ${{ needs.build.outputs.nextVersion }}
           base-branch: ${{ inputs.base-branch }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   release-integration:
     name: Release to Integration
