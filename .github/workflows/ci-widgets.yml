@@ -31,7 +31,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   tests:
-    uses: ./.github/workflows/reusable-widget.yml
+    uses: ./.github/workflows/reusable-widget-tests.yml
     needs: build
     with:
       node-version: ${{ inputs.node-version }}
