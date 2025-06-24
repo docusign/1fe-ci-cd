@@ -26,8 +26,6 @@ on:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
         required: true
-      GITHUB_TOKEN:
-        required: true
 
 jobs:
   build:
