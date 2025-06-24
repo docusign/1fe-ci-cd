@@ -47,7 +47,6 @@ jobs:
   lint:
     name: Run Linting
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - uses: actions/checkout@v4
       
@@ -64,7 +63,6 @@ jobs:
   unit-tests:
     name: Run Unit Tests
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - uses: actions/checkout@v4
 
@@ -81,7 +79,6 @@ jobs:
   e2e-tests:
     name: Run Playwright Tests
     runs-on: ubuntu-latest
-    needs: setup
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node and Install Dependencies
