@@ -26,6 +26,8 @@ on:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
         required: true
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   build:
@@ -63,6 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
+      - uses: actions/checkout@v4
       - name: Lint Source Code
         run: yarn lint
 
@@ -71,6 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
+      - uses: actions/checkout@v4
       - name: Run Unit Tests
         run: yarn test
 
@@ -79,6 +83,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
+      - uses: actions/checkout@v4
       - name: Run Playwright
         run: |
           echo "Running Playwright for version ${{ needs.setup.outputs.nextVersion }}"
@@ -110,6 +115,7 @@ jobs:
           widget-id: ${{ needs.build.outputs.widgetId }}
           next-version: ${{ needs.build.outputs.nextVersion }}
           base-branch: ${{ inputs.base-branch }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   release-integration:
     name: Release to Integration

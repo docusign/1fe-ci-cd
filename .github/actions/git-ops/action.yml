@@ -1,6 +1,6 @@
-# docusign/1fe-ci-cd/.github/actions/git-ops/action.yml
 name: 'Git Operations (Commit, Tag, Push)'
 description: 'Performs Git commit, tagging, and force push operations.'
+
 inputs:
   widget-id:
     description: "The widget ID from build"
@@ -11,28 +11,30 @@ inputs:
   base-branch:
     description: "The base branch to commit/tag back to"
     required: true
-  github-token: # <--- Input for GITHUB_TOKEN (passed from calling step)
+  github-token:
     description: "GITHUB_TOKEN for authentication"
     required: true
 
 runs:
-  using: "composite" # <--- IMPORTANT: This defines it as a composite action
+  using: composite
   steps:
     - name: Checkout Caller's Code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Required for amending and tagging
-        token: ${{ inputs.github-token }} # <--- Use the passed token for checkout
+        fetch-depth: 0
+        token: ${{ inputs.github-token }}
 
     - name: Configure Git User
       shell: bash
       run: |
         git config user.email "DevOpsTeam@docusign.com"
         git config user.name "svc-git-devops"
+
     - name: Set Git Remote URL with GITHUB_TOKEN
       shell: bash
-      # Use the passed token, not ${{ secrets.GITHUB_TOKEN }} directly as that's for the workflow itself
-      run: git remote set-url origin https://x-access-token:${{ inputs.github-token }}@github.com/${{ github.repository }}
+      run: |
+        git remote set-url origin https://x-access-token:${{ inputs.github-token }}@github.com/${{ github.repository }}
+
     - name: Prepare Commit Message and Tag
       shell: bash
       env:
@@ -45,6 +47,7 @@ runs:
         COMMIT_MSG="Bundle will be uploaded to: ${BUNDLE_URL} / Preview here: ${PREVIEW_URL}?widgetUrl=${BUNDLE_URL}&fixPreview=true [skip ci]"
         echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
         echo "TAG_VERSION=${VERSION}" >> $GITHUB_ENV
+
     - name: Stage package.json
       shell: bash
       run: git add package.json
@@ -60,6 +63,7 @@ runs:
         git fetch origin ${{ inputs.base-branch }}
         git reset --hard HEAD
         git push origin HEAD:${{ inputs.base-branch }} --force-with-lease --no-verify
+
     - name: Create and Push Tag
       shell: bash
       run: |
