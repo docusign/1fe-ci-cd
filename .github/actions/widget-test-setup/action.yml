@@ -1,12 +1,9 @@
-name: Run Widget Tests
-description: Run unit and Playwright tests for the widget.
+name: Widget Test Setup
+description: Shared setup to install deps (used by test jobs)
 
 inputs:
   node-version:
     description: Node.js version to use
-    required: true
-  nextVersion:
-    description: Widget version to test
     required: true
   PRIVATE_KEY_FOR_1FE:
     description: Private key for 1FE auth
@@ -14,10 +11,16 @@ inputs:
   PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
     description: Private key for widget base config
     required: true
+  nextVersion:
+    description: (Optional) widget version (used by callers for logging etc.)
+    required: false
 
 runs:
   using: "composite"
   steps:
+    - name: Checkout Caller Repo
+      uses: actions/checkout@v4
+
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
@@ -27,13 +30,3 @@ runs:
     - name: Install dependencies
       shell: bash
       run: yarn install --frozen-lockfile
-
-    - name: Run Unit Tests
-      shell: bash
-      run: yarn test
-
-    - name: Run Playwright Tests
-      shell: bash
-      run: |
-        echo "Running Playwright for version ${{ inputs.nextVersion }}"
-        yarn test:e2e

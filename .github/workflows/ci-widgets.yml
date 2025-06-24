@@ -1,8 +1,9 @@
-# docusign/1fe-ci-cd/.github/workflows/reusable-build-deploy-ci.yml
 name: Reusable Widget Build and Deploy CI
+
 permissions:
   contents: write
   id-token: write
+
 on:
   workflow_call:
     inputs:
@@ -25,36 +26,65 @@ on:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
         required: true
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   build:
-    name: Build and Versioning # Add name for clarity
-    runs-on: ubuntu-latest # This job needs a runner
-    outputs: # Job outputs from the composite action's outputs
+    name: Build and Versioning
+    runs-on: ubuntu-latest
+    outputs:
       widgetId: ${{ steps.call_build_composite.outputs.widgetId }}
       nextVersion: ${{ steps.call_build_composite.outputs.nextVersion }}
-    steps: # <--- THIS JOB NOW HAS STEPS TO CALL THE COMPOSITE ACTION
+    steps:
       - name: Call Widget Build Composite Action
-        id: call_build_composite # ID for the step calling the composite action
-        uses: docusign/1fe-ci-cd/.github/actions/widget-build@main # <--- Call the new composite action
+        id: call_build_composite
+        uses: docusign/1fe-ci-cd/.github/actions/widget-build@main
         with:
           node-version: ${{ inputs.node-version }}
           base-branch: ${{ inputs.base-branch }}
           private-key-for-1fe: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
           private-key-for-widget-base-config: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
-  tests:
-    name: Run All Tests
+  setup:
+    name: Setup (Yarn, Node)
     runs-on: ubuntu-latest
     needs: build
+    outputs:
+      nextVersion: ${{ needs.build.outputs.nextVersion }}
     steps:
-      - name: Call Widget Test Suite Composite Action
-        uses: docusign/1fe-ci-cd/.github/actions/run-widget-tests@main
+      - name: Install Deps via Composite Setup Action
+        uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
         with:
           node-version: ${{ inputs.node-version }}
-          nextVersion: ${{ needs.build.outputs.nextVersion }}
           PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
           PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+  lint:
+    name: Run Linting
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Lint Source Code
+        run: yarn lint
+
+  unit-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Run Unit Tests
+        run: yarn test
+
+  e2e-tests:
+    name: Run Playwright Tests
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Run Playwright
+        run: |
+          echo "Running Playwright for version ${{ needs.setup.outputs.nextVersion }}"
+          yarn test:e2e
 
   upload-integration:
     name: Upload to Akamai (Integration)
@@ -87,10 +117,10 @@ jobs:
   release-integration:
     name: Release to Integration
     runs-on: ubuntu-latest
-    needs: [build, tests, upload-integration, commit-tag-push]
+    needs: [build, lint, unit-tests, e2e-tests, upload-integration, commit-tag-push]
     if: github.ref_name == inputs.base-branch
     steps:
-      - name: Call Azure App Config Update Composite Action
+      - name: Update Azure AppConfig (Integration)
         uses: docusign/1fe-ci-cd/.github/actions/update-azure-config@main
         with:
           environment: integration
@@ -104,7 +134,7 @@ jobs:
     needs: [build, release-integration]
     if: github.ref_name == inputs.base-branch
     steps:
-      - name: Call Akamai Upload Composite Action
+      - name: Upload to Production CDN
         uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main
         with:
           widgetId: ${{ needs.build.outputs.widgetId }}
@@ -118,8 +148,8 @@ jobs:
     needs: upload-production
     if: github.ref_name == inputs.base-branch
     steps:
-      - name: Run production smoke tests
-        run: echo "Running post-upload tests on production..."
+      - name: Run Smoke Tests on Production
+        run: echo "Running production smoke tests..."
 
   approve-production-release:
     name: Approve Production Release
@@ -136,7 +166,7 @@ jobs:
     needs: [build, approve-production-release]
     if: github.ref_name == inputs.base-branch
     steps:
-      - name: Call Azure App Config Update Composite Action
+      - name: Update Azure AppConfig (Production)
         uses: docusign/1fe-ci-cd/.github/actions/update-azure-config@main
         with:
           environment: production
