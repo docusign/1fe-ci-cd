@@ -111,7 +111,7 @@ jobs:
   release-integration:
     name: Release to Integration
     runs-on: ubuntu-latest
-    needs: [build, lint, unit-tests, e2e-tests, upload-integration, commit-tag-push]
+    needs: [build, lint, unit-tests, e2e-tests, upload-integration]
     if: github.ref_name == inputs.base-branch
     steps:
       - name: Update Azure AppConfig (Integration)
