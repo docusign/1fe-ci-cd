@@ -73,8 +73,17 @@ jobs:
       - name: Set Widget ID and Version Output
         id: set_vars
         run: |
-          echo "widgetId=$(npm pkg get name | tr -d '"')" >> $GITHUB_OUTPUT
-          echo "nextVersion=$(npm pkg get version | tr -d '"')" >> $GITHUB_OUTPUT
+          # Get values using npm pkg get
+          WIDGET_ID_VALUE=$(npm pkg get name | tr -d '"')
+          NEXT_VERSION_VALUE=$(npm pkg get version | tr -d '"')
+
+          # Debugging: Print values to job logs
+          echo "Debug: Widget ID extracted: $WIDGET_ID_VALUE"
+          echo "Debug: Next Version extracted: $NEXT_VERSION_VALUE"
+
+          # Set outputs for the 'set_vars' step
+          echo "widgetId=$WIDGET_ID_VALUE" >> $GITHUB_OUTPUT
+          echo "nextVersion=$NEXT_VERSION_VALUE" >> $GITHUB_OUTPUT
 
       - name: Upload to Akamai (Integration)
         env:
