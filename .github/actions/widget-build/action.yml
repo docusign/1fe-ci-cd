@@ -1,0 +1,80 @@
+# docusign/1fe-ci-cd/.github/actions/widget-build/action.yml
+name: 'Widget Build and Versioning'
+description: 'Builds the widget, calculates version, and archives artifact.'
+inputs:
+  node-version:
+    description: "Node.js version to use"
+    required: false
+    default: "22"
+  base-branch:
+    description: "The base branch to commit/tag back to"
+    required: false
+    default: "main"
+  private-key-for-1fe: # Input for secrets
+    description: "PRIVATE_KEY_FOR_1FE"
+    required: true
+  private-key-for-widget-base-config: # Input for secrets
+    description: "PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG"
+    required: true
+outputs: # Outputs from this composite action
+  widgetId:
+    description: "The ID of the built widget"
+    value: ${{ steps.set_vars.outputs.widgetId }}
+  nextVersion:
+    description: "The calculated next version of the widget"
+    value: ${{ steps.set_vars.outputs.nextVersion }}
+
+runs:
+  using: "composite" # <--- IMPORTANT: This defines it as a composite action
+  steps:
+    - name: Checkout Caller's Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Required for amending and tagging (if needed by subsequent composite actions like git-ops)
+    - name: Configure Git User
+      shell: bash
+      run: |
+          git config --global user.email "DevOpsTeam@docusign.com"
+          git config --global user.name "svc-git-devops"
+    - name: Set up dependency SSH keys
+      uses: webfactory/ssh-agent@v0.9.1
+      with:
+        ssh-private-key: |
+          ${{ inputs.private-key-for-1fe }}
+          ${{ inputs.private-key-for-widget-base-config }}
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "yarn"
+    - name: Install Dependencies
+      shell: bash
+      run: yarn install --no-immutable
+    - name: Build the Widget
+      shell: bash
+      run: yarn build:widget
+    - name: Calculate next version and set outputs
+      id: set_vars # Keep this ID for outputs
+      shell: bash
+      run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            npm version prepatch --no-git-tag-version --preid "PR-${{ github.event.pull_request.number }}.${GITHUB_SHA::7}"
+          elif [[ "${{ inputs.base-branch }}" == "main" ]]; # Use input base-branch for comparison
+          then
+            npm version patch --no-git-tag-version
+          fi
+
+          WIDGET_ID_VAL=$(npm pkg get name | tr -d '"')
+          NEXT_VERSION_VAL=$(npm pkg get version | tr -d '"')
+
+          echo "Debug: Widget ID extracted (composite build): $WIDGET_ID_VAL"
+          echo "Debug: Next Version extracted (composite build): $NEXT_VERSION_VAL"
+
+          echo "widgetId=$WIDGET_ID_VAL" >> $GITHUB_OUTPUT
+          echo "nextVersion=$NEXT_VERSION_VAL" >> $GITHUB_OUTPUT
+
+    - name: Archive build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: widget-build
+        path: ./dist
