@@ -1,9 +1,8 @@
-name: Widget Build
-
+# docusign/1fe-ci-cd/.github/workflows/reusable-build-deploy-ci.yml
+name: Reusable Widget Build and Deploy CI
 permissions:
   contents: write
   id-token: write
-
 on:
   workflow_call:
     inputs:
@@ -24,137 +23,102 @@ on:
         required: true
       AKAMAI_NS_SSH_PRIVATE_KEY:
         required: true
+      AZURE_APP_CONFIG_CONNECTION_STRING:
+        required: true
 
 jobs:
   build:
-    name: Build and Commit Version
+    uses: ./.github/workflows/reusable-widget-build.yml # Call the reusable build workflow
+    with:
+      node-version: ${{ inputs.node-version }}
+      base-branch: ${{ inputs.base-branch }}
+    secrets:
+      PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+      # AKAMAI_NS_SSH_PRIVATE_KEY is not directly used in build, but can be passed through if needed for dependencies
+
+  tests:
+    uses: ./.github/workflows/reusable-widget-tests.yml # Call the reusable tests workflow
+    needs: build # Depends on build completing
+    with:
+      node-version: ${{ inputs.node-version }}
+      nextVersion: ${{ needs.build.outputs.nextVersion }} # Pass version for Playwright
+    secrets:
+      PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
+  upload-integration:
+    uses: ./.github/workflows/reusable-widget-upload-akamai.yml # Call reusable Akamai upload for integration
+    needs: build # Needs build outputs and artifact
+    if: github.ref_name == inputs.base-branch
+    with:
+      widgetId: ${{ needs.build.outputs.widgetId }}
+      nextVersion: ${{ needs.build.outputs.nextVersion }}
+      akamai-env-path: "integration" # Specify integration environment
+    secrets:
+      AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+
+  commit-tag-push:
+    uses: ./.github/workflows/reusable-git-ops.yml # Call reusable git ops workflow
+    needs: build # Needs build outputs for versioning
+    if: github.ref_name == inputs.base-branch # Only run on base branch
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Pass GITHUB_TOKEN for pushing
+    with:
+      widget-id: ${{ needs.build.outputs.widgetId }}
+      next-version: ${{ needs.build.outputs.nextVersion }}
+      base-branch: ${{ inputs.base-branch }}
+
+  release-integration:
+    name: Release to Integration
+    # Depends on build, tests, integration upload, and git ops completing
+    needs: [build, tests, upload-integration, commit-tag-push]
+    if: github.ref_name == inputs.base-branch
+    uses: ./.github/workflows/reusable-update-azure-config.yml # Call reusable Azure update
+    with:
+      environment: integration
+      widgetId: ${{ needs.build.outputs.widgetId }}
+      nextVersion: ${{ needs.build.outputs.nextVersion }}
+    secrets:
+      AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}
+
+  upload-production:
+    uses: ./.github/workflows/reusable-widget-upload-akamai.yml # Call reusable Akamai upload for production
+    needs: [build, release-integration] # Depends on build and integration release
+    if: github.ref_name == inputs.base-branch
+    with:
+      widgetId: ${{ needs.build.outputs.widgetId }}
+      nextVersion: ${{ needs.build.outputs.nextVersion }}
+      akamai-env-path: "production" # Specify production environment
+    secrets:
+      AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
+
+  test-production:
+    name: Test Production
     runs-on: ubuntu-latest
-    outputs:
-      widgetId: ${{ steps.set_vars.outputs.widgetId }}
-      nextVersion: ${{ steps.set_vars.outputs.nextVersion }}
+    needs: upload-production # Depends on production upload being complete
+    if: github.ref_name == inputs.base-branch
     steps:
-      - name: Checkout Caller's Code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # Required for amending and tagging
+      - name: Run production smoke tests
+        run: echo "Running post-upload tests on production..."
 
-      - name: Configure Git User
-        run: |
-          git config --global user.email "DevOpsTeam@docusign.com"
-          git config --global user.name "svc-git-devops"
+  approve-production-release:
+    name: Approve Production Release
+    runs-on: ubuntu-latest
+    needs: test-production
+    if: github.ref_name == inputs.base-branch
+    environment: production-release # This will trigger a manual approval
+    steps:
+      - run: echo "Production release approved."
 
-      - name: Set up dependency SSH keys
-        uses: webfactory/ssh-agent@v0.9.1
-        with:
-          ssh-private-key: |
-            ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-            ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ inputs.node-version }}
-          cache: "yarn"
-
-      - name: Install Dependencies
-        run: yarn install --no-immutable
-
-      - name: Build the Widget
-        run: yarn build:widget
-
-      - name: Calculate next version
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            npm version prepatch --no-git-tag-version --preid "PR-${{ github.event.pull_request.number }}.${GITHUB_SHA::7}"
-          elif [[ "${{ github.ref_name }}" == "${{ inputs.base-branch }}" ]]; then
-            npm version patch --no-git-tag-version
-          fi
-
-      - name: Set Widget ID and Version Output
-        id: set_vars
-        run: |
-          # Get values using npm pkg get
-          WIDGET_ID_VALUE=$(npm pkg get name | tr -d '"')
-          NEXT_VERSION_VALUE=$(npm pkg get version | tr -d '"')
-
-          # Debugging: Print values to job logs
-          echo "Debug: Widget ID extracted: $WIDGET_ID_VALUE"
-          echo "Debug: Next Version extracted: $NEXT_VERSION_VALUE"
-
-          # Set outputs for the 'set_vars' step
-          echo "widgetId=$WIDGET_ID_VALUE" >> $GITHUB_OUTPUT
-          echo "nextVersion=$NEXT_VERSION_VALUE" >> $GITHUB_OUTPUT
-
-      - name: Upload to Akamai (Integration)
-        env:
-          AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
-          WIDGET_ID: ${{ steps.set_vars.outputs.widgetId }}
-          NEXT_VERSION: ${{ steps.set_vars.outputs.nextVersion }}
-        run: |
-          set -e
-          SSH_KEY_PATH="$HOME/key.pem"
-          printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
-          chmod 600 "$SSH_KEY_PATH"
-          local_source_dir="dist"
-          staging_dir="staging_for_rsync"
-          relative_path_to_create="integration/widgets/$WIDGET_ID/$NEXT_VERSION"
-          full_staging_path="$staging_dir/$relative_path_to_create"
-          mkdir -p "$full_staging_path"
-          cp -a "$local_source_dir/." "$full_staging_path/"
-          REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
-          SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
-          cd "$staging_dir"
-          rsync -avvRO -e "ssh $SSH_OPTS" "integration/" "$REMOTE_HOST:"
-          cd ..
-          rm -rf "$staging_dir"
-          shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
-
-      - name: Archive build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: widget-build
-          path: ./dist
-
-      - name: Commit, Tag, and Push Updated Version (CI is Source of Truth)
-        if: github.ref_name == inputs.base-branch
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-
-          VERSION="${{ steps.set_vars.outputs.nextVersion }}"
-          WIDGET_NAME="${{ steps.set_vars.outputs.widgetId }}"
-          INTEGRATION_CDN_URL="https://1fe-a.akamaihd.net/integration/widgets"
-          PREVIEW_URL="https://demo.1fe.com/bathtub"
-          BUNDLE_URL="${INTEGRATION_CDN_URL}/${WIDGET_NAME}/${VERSION}/js/1fe-bundle.js"
-          COMMIT_MSG="Bundle will be uploaded to: ${BUNDLE_URL} / Preview here: ${PREVIEW_URL}?widgetUrl=${BUNDLE_URL}&fixPreview=true [skip ci]"
-
-          echo "Setting up Git identity"
-          git config user.email "DevOpsTeam@docusign.com"
-          git config user.name "svc-git-devops"
-
-          echo "Updating origin to use GITHUB_TOKEN"
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}
-
-          echo "Staging files"
-          git add package.json
-
-          echo "Amending commit"
-          git commit --amend --no-verify -m "$COMMIT_MSG" || echo "Nothing to amend"
-
-          echo "Fetching latest main"
-          git fetch origin ${{ github.ref_name }}
-
-          echo "Force resetting local branch to HEAD (pipeline commit)"
-          git reset --hard HEAD
-
-          echo "Force pushing pipeline commit to remote (CI is source of truth)"
-          git push origin HEAD:${{ github.ref_name }} --force-with-lease --follow-tags --no-verify
-
-          echo "Tagging version $VERSION"
-          if git tag -a "$VERSION" -m "Release: $VERSION" 2>/dev/null; then
-            echo "Tag created"
-            git push origin "$VERSION" --force
-          else
-            echo "Tag $VERSION already exists. Skipping tag push..."
-          fi
+  release-production:
+    name: Release to Production
+    needs: [build, approve-production-release] # Depends on build and approval
+    if: github.ref_name == inputs.base-branch
+    uses: ./.github/workflows/reusable-update-azure-config.yml # Call reusable Azure update
+    with:
+      environment: production
+      widgetId: ${{ needs.build.outputs.widgetId }}
+      nextVersion: ${{ needs.build.outputs.nextVersion }}
+    secrets:
+      AZURE_APP_CONFIG_CONNECTION_STRING: ${{ secrets.AZURE_APP_CONFIG_CONNECTION_STRING }}

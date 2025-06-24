@@ -1,5 +1,5 @@
-name: Widget Upload
-
+# docusign/1fe-ci-cd/.github/workflows/reusable-widget-upload-akamai.yml
+name: Reusable - Widget Upload to Akamai
 on:
   workflow_call:
     inputs:
@@ -11,50 +11,55 @@ on:
         description: "Next Version"
         required: true
         type: string
-      environment:
-        description: "Upload environment: integration or production"
+      akamai-env-path: # New input for 'integration' or 'production' path on Akamai
+        description: "Akamai environment path (e.g., integration, production)"
         required: true
         type: string
-        default: "integration"
     secrets:
       AKAMAI_NS_SSH_PRIVATE_KEY:
         required: true
 
 jobs:
   upload:
-    name: Upload Widget to Akamai
+    name: Upload to Akamai (${{ inputs.akamai-env-path }})
     runs-on: ubuntu-latest
     steps:
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
           name: widget-build
-          path: ./dist
+          path: ./dist # Downloads artifact to dist directory
+
+      - name: Debug Widget ID and Version
+        run: |
+          echo "WIDGET_ID='${{ inputs.widgetId }}'"
+          echo "NEXT_VERSION='${{ inputs.nextVersion }}'"
+          echo "AKAMAI_ENV_PATH='${{ inputs.akamai-env-path }}'"
+          ls -R dist # List contents of dist to confirm artifact is there
+
       - name: Upload to Akamai
         env:
           AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
           WIDGET_ID: ${{ inputs.widgetId }}
           NEXT_VERSION: ${{ inputs.nextVersion }}
-          ENVIRONMENT: ${{ inputs.environment }}
+          AKAMAI_ENV_PATH: ${{ inputs.akamai-env-path }} # Use input directly
         run: |
           set -e
           SSH_KEY_PATH="$HOME/key.pem"
           printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
           chmod 600 "$SSH_KEY_PATH"
-          
           local_source_dir="dist"
           staging_dir="staging_for_rsync"
-          relative_path_to_create="${ENVIRONMENT}/widgets/$WIDGET_ID/$NEXT_VERSION"
+          # Use AKAMAI_ENV_PATH here for dynamic path construction
+          relative_path_to_create="${AKAMAI_ENV_PATH}/widgets/$WIDGET_ID/$NEXT_VERSION"
           full_staging_path="$staging_dir/$relative_path_to_create"
-          
           mkdir -p "$full_staging_path"
           cp -a "$local_source_dir/." "$full_staging_path/"
-          
           REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
           SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
-          
           cd "$staging_dir"
-          rsync -avvRO -e "ssh $SSH_OPTS" "${ENVIRONMENT}/" "$REMOTE_HOST:"
+          # rsync from the environment-specific path
+          rsync -avvRO -e "ssh $SSH_OPTS" "${AKAMAI_ENV_PATH}/" "$REMOTE_HOST:"
           cd ..
           rm -rf "$staging_dir"
           shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
