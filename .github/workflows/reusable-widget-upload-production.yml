@@ -25,6 +25,14 @@ jobs:
         with:
           name: widget-build
           path: ./dist
+
+      - name: Debug Widget ID and Version
+        run: |
+          echo "WIDGET_ID='${{ inputs.widgetId }}'"
+          echo "NEXT_VERSION='${{ inputs.nextVersion }}'"
+          ls -R dist
+
+
       - name: Upload to Akamai (Production)
         env:
           AKAMAI_NS_SSH_PRIVATE_KEY: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
