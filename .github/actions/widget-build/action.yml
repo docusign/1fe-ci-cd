@@ -80,11 +80,13 @@ runs:
         path: ./dist
 
     - name: Set Git Remote URL with GITHUB_TOKEN
+      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       run: |
-        git remote set-url origin https://x-access-token:${{ inputs.github-token }}@github.com/${{ github.repository }}
+        git remote set-url origin https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}
 
     - name: Prepare Commit Message and Tag
+      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       env:
         VERSION: ${{ steps.set_vars.outputs.nextVersion }}
@@ -97,15 +99,15 @@ runs:
         echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
         echo "TAG_VERSION=${VERSION}" >> $GITHUB_ENV
 
-    - name: Stage package.json
+    - name: Stage package.json and Commit for non-PR runs
+      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
-      run: git add package.json
+      run: |
+        git add package.json
+        git commit --amend --no-verify -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
 
-    - name: Amend Commit
-      shell: bash
-      run: git commit --amend --no-verify -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
-
-    - name: Fetch and Force Push to Remote
+    - name: Fetch and Force Push to Remote for non-PR runs
+      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       run: |
         set -euo pipefail
@@ -114,6 +116,7 @@ runs:
         git push origin HEAD:${{ inputs.base-branch }} --force-with-lease --no-verify
 
     - name: Create and Push Tag
+      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       run: |
         if git tag -a "${{ env.TAG_VERSION }}" -m "Release: ${{ env.TAG_VERSION }}" 2>/dev/null; then
