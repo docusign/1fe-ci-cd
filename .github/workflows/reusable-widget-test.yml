@@ -53,4 +53,4 @@ jobs:
       - run: |
           echo "Running Playwright for version ${{ inputs.widget-version }}"
           npx playwright install --with-deps
-          DEBUG=pw:api npx playwright test
+          WIDGET_VERSION=${{ inputs.widget-version }} DEBUG=pw:api npx playwright test
