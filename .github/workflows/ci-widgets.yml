@@ -44,13 +44,14 @@ jobs:
           private-key-for-1fe: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
           private-key-for-widget-base-config: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
-  tests:
+  lint-and-unit-tests:
     uses: ./.github/workflows/reusable-widget-test.yml
     needs: build
     with:
       node-version: ${{ inputs.node-version }}
       widget-id: ${{ needs.build.outputs.widgetId }}
       widget-version: ${{ needs.build.outputs.nextVersion }}
+      test-type: "lint-and-unit"
     secrets:
       PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
       PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
@@ -59,7 +60,6 @@ jobs:
     name: Upload to Akamai (Integration)
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref_name == inputs.base-branch
     steps:
       - name: Call Akamai Upload Composite Action
         uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main
@@ -69,10 +69,22 @@ jobs:
           akamai-env-path: "integration"
           akamai-ns-ssh-private-key: ${{ secrets.AKAMAI_NS_SSH_PRIVATE_KEY }}
 
+  e2e-tests:
+    uses: ./.github/workflows/reusable-widget-test.yml
+    needs: [build, upload-integration]
+    with:
+      node-version: ${{ inputs.node-version }}
+      widget-id: ${{ needs.build.outputs.widgetId }}
+      widget-version: ${{ needs.build.outputs.nextVersion }}
+      test-type: "e2e"
+    secrets:
+      PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
+      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+
   release-integration:
     name: Release to Integration
     runs-on: ubuntu-latest
-    needs: [build, tests, upload-integration]
+    needs: [build, lint-and-unit-tests, e2e-tests, upload-integration]
     if: github.ref_name == inputs.base-branch
     steps:
       - name: Update Azure AppConfig (Integration)
