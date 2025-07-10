@@ -12,10 +12,6 @@ on:
       widget-id:
         type: string
         required: false
-      test-type:
-        type: string
-        required: false
-        default: "all"
     secrets:
       PRIVATE_KEY_FOR_1FE:
         required: true
@@ -25,7 +21,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    if: inputs.test-type == 'all' || inputs.test-type == 'lint-and-unit'
     steps:
       - uses: actions/checkout@v4
       - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
@@ -37,7 +32,6 @@ jobs:
 
   unit-tests:
     runs-on: ubuntu-latest
-    if: inputs.test-type == 'all' || inputs.test-type == 'lint-and-unit'
     steps:
       - uses: actions/checkout@v4
       - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
@@ -49,7 +43,6 @@ jobs:
 
   e2e-tests:
     runs-on: ubuntu-latest
-    if: inputs.test-type == 'all' || inputs.test-type == 'e2e'
     steps:
       - uses: actions/checkout@v4
       - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
