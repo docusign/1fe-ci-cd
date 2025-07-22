@@ -26,6 +26,8 @@ on:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
         required: true
+      NPM_TOKEN_READONLY:
+        required: false
 
 jobs:
   build:
@@ -43,6 +45,7 @@ jobs:
           base-branch: ${{ inputs.base-branch }}
           private-key-for-1fe: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
           private-key-for-widget-base-config: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
+          npm-token-readonly: ${{ secrets.NPM_TOKEN_READONLY }}
 
   upload-integration:
     name: Upload to Akamai (Integration)
