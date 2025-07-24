@@ -5,12 +5,6 @@ inputs:
   node-version:
     description: Node.js version to use
     required: true
-  PRIVATE_KEY_FOR_1FE:
-    description: Private key for 1FE auth
-    required: true
-  PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
-    description: Private key for widget base config
-    required: true
   nextVersion:
     description: (Optional) widget version (used by callers for logging etc.)
     required: false

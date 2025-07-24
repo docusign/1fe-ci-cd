@@ -12,11 +12,6 @@ on:
       widget-id:
         type: string
         required: false
-    secrets:
-      PRIVATE_KEY_FOR_1FE:
-        required: true
-      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
-        required: true
 
 jobs:
   lint:
@@ -27,8 +22,6 @@ jobs:
       - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
         with:
           node-version: ${{ inputs.node-version }}
-          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
       - run: yarn lint
 
   unit-tests:
@@ -39,8 +32,6 @@ jobs:
       - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
         with:
           node-version: ${{ inputs.node-version }}
-          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
       - run: yarn test
 
   e2e-tests:
@@ -51,8 +42,6 @@ jobs:
       - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
         with:
           node-version: ${{ inputs.node-version }}
-          PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-          PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
       - run: |
           echo "Running Playwright for version ${{ inputs.widget-version }}"
           npx playwright install --with-deps

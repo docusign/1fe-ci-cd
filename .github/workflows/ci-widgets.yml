@@ -18,10 +18,6 @@ on:
         type: string
         default: "main"
     secrets:
-      PRIVATE_KEY_FOR_1FE:
-        required: true
-      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG:
-        required: true
       AKAMAI_NS_SSH_PRIVATE_KEY:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
@@ -41,8 +37,6 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           base-branch: ${{ inputs.base-branch }}
-          private-key-for-1fe: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-          private-key-for-widget-base-config: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
   upload-integration:
     name: Upload to Akamai (Integration)
@@ -64,9 +58,6 @@ jobs:
       node-version: ${{ inputs.node-version }}
       widget-id: ${{ needs.build.outputs.widgetId }}
       widget-version: ${{ needs.build.outputs.nextVersion }}
-    secrets:
-      PRIVATE_KEY_FOR_1FE: ${{ secrets.PRIVATE_KEY_FOR_1FE }}
-      PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG: ${{ secrets.PRIVATE_KEY_FOR_WIDGET_BASE_CONFIG }}
 
   release-integration:
     name: Release to Integration
