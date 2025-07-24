@@ -1,6 +1,6 @@
 # docusign/1fe-ci-cd/.github/actions/widget-build/action.yml
-name: 'Widget Build and Versioning'
-description: 'Builds the widget, calculates version, and archives artifact.'
+name: "Widget Build and Versioning"
+description: "Builds the widget, calculates version, and archives artifact."
 inputs:
   node-version:
     description: "Node.js version to use"
@@ -35,31 +35,45 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: "yarn"
+        registry-url: "https://registry.npmjs.org" # Ensure the registry URL is set
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.npm-token-readonly }} # Set the npm token as an environment variable
+
+    - name: Authenticate to npm
+      if: ${{ inputs.npm-token-readonly != '' }}
+      shell: bash
+      run: |
+        echo "//registry.npmjs.org/:_authToken=${{ inputs.npm-token-readonly }}" > ${{ env.NPM_CONFIG_USERCONFIG }}
+        yarn config set npmRegistryServer https://registry.npmjs.org
+        yarn config set npmAuthToken ${{ inputs.npm-token-readonly }}
+
     - name: Install Dependencies
       shell: bash
       run: yarn install --no-immutable
+
     - name: Build the Widget
       shell: bash
       run: yarn build:widget
+
     - name: Calculate next version and set outputs
       id: set_vars # Keep this ID for outputs
       shell: bash
       run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            npm version prepatch --no-git-tag-version --preid "PR-${{ github.event.pull_request.number }}.${GITHUB_SHA::7}"
-          elif [[ "${{ inputs.base-branch }}" == "main" ]]; # Use input base-branch for comparison
-          then
-            npm version patch --no-git-tag-version
-          fi
+        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+          npm version prepatch --no-git-tag-version --preid "PR-${{ github.event.pull_request.number }}.${GITHUB_SHA::7}"
+        elif [[ "${{ inputs.base-branch }}" == "main" ]]; # Use input base-branch for comparison
+        then
+          npm version patch --no-git-tag-version
+        fi
 
-          WIDGET_ID_VAL=$(npm pkg get name | tr -d '"')
-          NEXT_VERSION_VAL=$(npm pkg get version | tr -d '"')
+        WIDGET_ID_VAL=$(npm pkg get name | tr -d '"')
+        NEXT_VERSION_VAL=$(npm pkg get version | tr -d '"')
 
-          echo "Debug: Widget ID extracted (composite build): $WIDGET_ID_VAL"
-          echo "Debug: Next Version extracted (composite build): $NEXT_VERSION_VAL"
+        echo "Debug: Widget ID extracted (composite build): $WIDGET_ID_VAL"
+        echo "Debug: Next Version extracted (composite build): $NEXT_VERSION_VAL"
 
-          echo "widgetId=$WIDGET_ID_VAL" >> $GITHUB_OUTPUT
-          echo "nextVersion=$NEXT_VERSION_VAL" >> $GITHUB_OUTPUT
+        echo "widgetId=$WIDGET_ID_VAL" >> $GITHUB_OUTPUT
+        echo "nextVersion=$NEXT_VERSION_VAL" >> $GITHUB_OUTPUT
 
     - name: Archive build artifact
       uses: actions/upload-artifact@v4
@@ -72,6 +86,7 @@ runs:
       shell: bash
       run: |
         git remote set-url origin https://x-access-token:${{ inputs.github-token }}@github.com/${{ github.repository }}
+
     - name: Prepare Commit Message and Tag
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash

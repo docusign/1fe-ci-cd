@@ -22,6 +22,8 @@ on:
         required: true
       AZURE_APP_CONFIG_CONNECTION_STRING:
         required: true
+      NPM_TOKEN_READONLY:
+        required: false
 
 jobs:
   build:
