@@ -35,7 +35,7 @@ jobs:
     steps:
       - name: Call Widget Build Composite Action
         id: call_build_composite
-        uses: docusign/1fe-ci-cd/.github/actions/widget-build@main
+        uses: ./.github/actions/widget-build@main
         with:
           node-version: ${{ inputs.node-version }}
           base-branch: ${{ inputs.base-branch }}
@@ -46,7 +46,7 @@ jobs:
     needs: build
     steps:
       - name: Call Akamai Upload Composite Action
-        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main
+        uses: ./.github/actions/widget-upload-akamai@main
         with:
           widgetId: ${{ needs.build.outputs.widgetId }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
@@ -68,7 +68,7 @@ jobs:
     if: github.ref_name == inputs.base-branch
     steps:
       - name: Update Azure AppConfig (Integration)
-        uses: docusign/1fe-ci-cd/.github/actions/update-azure-config@main
+        uses: ./.github/actions/update-azure-config@main
         with:
           environment: integration
           widgetId: ${{ needs.build.outputs.widgetId }}
@@ -82,7 +82,7 @@ jobs:
     if: github.ref_name == inputs.base-branch
     steps:
       - name: Upload to Production CDN
-        uses: docusign/1fe-ci-cd/.github/actions/widget-upload-akamai@main
+        uses: ./.github/actions/widget-upload-akamai@main
         with:
           widgetId: ${{ needs.build.outputs.widgetId }}
           nextVersion: ${{ needs.build.outputs.nextVersion }}
@@ -114,7 +114,7 @@ jobs:
     if: github.ref_name == inputs.base-branch
     steps:
       - name: Update Azure AppConfig (Production)
-        uses: docusign/1fe-ci-cd/.github/actions/update-azure-config@main
+        uses: ./.github/actions/update-azure-config@main
         with:
           environment: production
           widgetId: ${{ needs.build.outputs.widgetId }}

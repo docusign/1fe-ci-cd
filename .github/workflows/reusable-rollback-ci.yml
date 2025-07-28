@@ -50,7 +50,7 @@ jobs:
 
       - name: Check CDN Asset Exists
         id: check_cdn
-        uses: docusign/1fe-ci-cd/.github/actions/check-cdn-asset@main
+        uses: ./.github/actions/check-cdn-asset@main
         with:
           widgetId: ${{ steps.get_widget_id.outputs.widgetId }}
           targetVersion: ${{ inputs.target-version }}
@@ -60,7 +60,7 @@ jobs:
     name: Update Azure App Config
     needs: check-and-prepare
     if: ${{ needs.check-and-prepare.outputs.assetExists == 'true' }}
-    uses: docusign/1fe-ci-cd/.github/workflows/reusable-update-azure-config.yml@main
+    uses: ./.github/workflows/reusable-update-azure-config.yml@main
     with:
       environment: ${{ inputs.environment }}
       widgetId: ${{ needs.check-and-prepare.outputs.widgetId }}

@@ -1,4 +1,3 @@
-# docusign/1fe-ci-cd/.github/actions/widget-build/action.yml
 name: "Widget Build and Versioning"
 description: "Builds the widget, calculates version, and archives artifact."
 inputs:

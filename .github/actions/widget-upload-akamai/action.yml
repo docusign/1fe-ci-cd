@@ -1,4 +1,3 @@
-# docusign/1fe-ci-cd/.github/actions/widget-upload-akamai/action.yml
 name: 'Widget Upload to Akamai CDN'
 description: 'Downloads build artifact and uploads it to Akamai CDN.'
 
@@ -53,7 +52,7 @@ runs:
 
     - name: Check CDN Asset Exists
       id: check_cdn
-      uses: docusign/1fe-ci-cd/.github/actions/check-cdn-asset@main
+      uses: ./.github/actions/check-cdn-asset@main
       with:
         widgetId: ${{ inputs.widgetId }}
         targetVersion: ${{ inputs.nextVersion }}
