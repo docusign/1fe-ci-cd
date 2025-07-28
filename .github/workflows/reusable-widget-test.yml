@@ -19,7 +19,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/widget-test-setup@main
+      - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
         with:
           node-version: ${{ inputs.node-version }}
       - run: yarn lint
@@ -29,7 +29,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/widget-test-setup@main
+      - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
         with:
           node-version: ${{ inputs.node-version }}
       - run: yarn test
@@ -39,7 +39,7 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/widget-test-setup@main
+      - uses: docusign/1fe-ci-cd/.github/actions/widget-test-setup@main
         with:
           node-version: ${{ inputs.node-version }}
       - run: |

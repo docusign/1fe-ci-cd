@@ -52,7 +52,7 @@ runs:
 
     - name: Check CDN Asset Exists
       id: check_cdn
-      uses: ./.github/actions/check-cdn-asset@main
+      uses: docusign/1fe-ci-cd/.github/actions/check-cdn-asset@main
       with:
         widgetId: ${{ inputs.widgetId }}
         targetVersion: ${{ inputs.nextVersion }}
