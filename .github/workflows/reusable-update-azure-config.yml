@@ -1,4 +1,3 @@
-# docusign/1fe-ci-cd/.github/workflows/reusable-update-azure-config.yml
 name: Reusable - Update Azure App Configuration
 on:
   workflow_call:

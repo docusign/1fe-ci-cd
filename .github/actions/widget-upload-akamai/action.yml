@@ -1,4 +1,3 @@
-# docusign/1fe-ci-cd/.github/actions/widget-upload-akamai/action.yml
 name: 'Widget Upload to Akamai CDN'
 description: 'Downloads build artifact and uploads it to Akamai CDN.'
 
