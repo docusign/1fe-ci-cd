@@ -27,7 +27,7 @@ on:
       AZURE_RESOURCE_GROUP:
         required: true
       NPM_TOKEN_READONLY:
-        required: false
+        required: true
 
 jobs:
   build:
