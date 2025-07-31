@@ -1,10 +1,33 @@
 name: CI/CD Pipeline
 
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main] # Change this to your release branch if different
+  workflow_call:
+    inputs:
+      node-version:
+        description: "Node.js version to use"
+        required: false
+        type: string
+        default: "22"
+      base-branch:
+        description: "The base branch to commit/tag back to"
+        required: false
+        type: string
+        default: "main"
+    secrets:
+      SSH_PRIVATE_1FE:
+        required: true
+      AKAMAI_NS_SSH_PRIVATE_KEY:
+        required: true
+      AZUREAPPSERVICE_CLIENTID:
+          required: true
+      AZUREAPPSERVICE_TENANTID:
+          required: true
+      AZUREAPPSERVICE_SUBSCRIPTIONID:
+          required: true
+      AZURE_RESOURCE_GROUP:
+        required: true
+      NPM_TOKEN_READONLY:
+        required: false
 
 jobs:
   build:
@@ -24,7 +47,7 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/common-ci/setup
         with:
-          npm_token_readonly: ${{ secrets.NPM_TOKEN_READONLY_1FE }}
+          npm_token_readonly: ${{ secrets.NPM_TOKEN_READONLY }}
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
 
@@ -84,7 +107,7 @@ jobs:
       - name: Setup environment
         uses: ./.github/actions/common-ci/setup
         with:
-          npm_token_readonly: ${{ secrets.NPM_TOKEN_READONLY_1FE }}
+          npm_token_readonly: ${{ secrets.NPM_TOKEN_READONLY }}
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
 
@@ -100,7 +123,7 @@ jobs:
   # This job only runs on push events to main branch (release)
   deploy:
     name: Deploy
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     environment:
