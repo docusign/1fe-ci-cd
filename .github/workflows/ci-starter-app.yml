@@ -19,11 +19,11 @@ on:
       AKAMAI_NS_SSH_PRIVATE_KEY:
         required: true
       AZUREAPPSERVICE_CLIENTID:
-          required: true
+        required: true
       AZUREAPPSERVICE_TENANTID:
-          required: true
+        required: true
       AZUREAPPSERVICE_SUBSCRIPTIONID:
-          required: true
+        required: true
       AZURE_RESOURCE_GROUP:
         required: true
       NPM_TOKEN_READONLY:
@@ -133,6 +133,9 @@ jobs:
       id-token: write # Required for requesting the JWT
       contents: read # Required for actions/checkout
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       # Azure deployment
       - name: Download artifact for deployment
         uses: actions/download-artifact@v4
