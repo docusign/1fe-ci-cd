@@ -39,6 +39,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           base-branch: ${{ inputs.base-branch }}
+          npm-token-readonly: ${{ secrets.NPM_TOKEN_READONLY }}
 
   upload-integration:
     name: Upload to Akamai (Integration)
