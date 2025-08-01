@@ -148,10 +148,10 @@ jobs:
           ls -lh release.zip
           echo ""
           echo "=== ZIP CONTENTS ==="
-          unzip -l release.zip | head -20
+          unzip -l release.zip | head -20 # commenting this to avoid excessive output
           echo ""
           echo "=== EXTRACTING ZIP ==="
-          unzip release.zip
+          unzip -o release.zip
           echo ""
           echo "=== EXTRACTED FOLDER STRUCTURE ==="
           find . -maxdepth 3 -type d | sort
