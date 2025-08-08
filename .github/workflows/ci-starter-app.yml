@@ -250,6 +250,14 @@ jobs:
           package: ./
           startup-command: "yarn run start"
 
+      - name: Authenticate to npm
+        shell: bash
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ${{ env.NPM_CONFIG_USERCONFIG }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+
       - name: Publish shell types to npm
         id: changesets
         uses: changesets/action@v1
