@@ -28,6 +28,13 @@ on:
         required: true
       NPM_TOKEN_READONLY:
         required: true
+      NPM_TOKEN:
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
 
 jobs:
   build:
@@ -56,7 +63,7 @@ jobs:
 
       # Create zip file for Azure deployment (only for release)
       - name: Zip artifact for deployment
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -e  # Exit immediately if any command fails
@@ -83,7 +90,7 @@ jobs:
 
       # Upload release zip for deployment job - only for release
       - name: Upload artifact for deployment
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: node-app
@@ -123,15 +130,17 @@ jobs:
   # This job only runs on push events to main branch (release)
   deploy:
     name: Deploy
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'    
     needs: test
     runs-on: ubuntu-latest
     environment:
       name: "Production"
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
-      id-token: write # Required for requesting the JWT
-      contents: read # Required for actions/checkout
+      id-token: write
+      contents: write 
+      pull-requests: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -241,11 +250,18 @@ jobs:
           package: ./
           startup-command: "yarn run start"
 
+      - name: Authenticate to npm
+        shell: bash
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ${{ env.NPM_CONFIG_USERCONFIG }}
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+
       - name: Publish shell types to npm
         id: changesets
         uses: changesets/action@v1
         with:
-          # Changesets handles publishing with the publishConfig from each package.json
           publish: yarn changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
