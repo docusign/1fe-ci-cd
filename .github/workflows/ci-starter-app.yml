@@ -28,6 +28,14 @@ on:
         required: true
       NPM_TOKEN_READONLY:
         required: true
+      # You need to pass the NPM_TOKEN secret from the caller workflow for publishing
+      NPM_TOKEN:
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
 
 jobs:
   build:
@@ -36,13 +44,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      # Run version bump only on push to main (release)
-      # - name: Bump version and push tag
-      #   if: github.event_name == 'push'
-      #   uses: phips28/gh-action-bump-version@v11.0.7
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup environment
         uses: ./.github/actions/common-ci/setup
@@ -54,26 +55,20 @@ jobs:
       - name: Build
         uses: ./.github/actions/common-ci/build
 
-      # Create zip file for Azure deployment (only for release)
       - name: Zip artifact for deployment
         if: github.event_name == 'push'
         shell: bash
         run: |
-          set -e  # Exit immediately if any command fails
-
+          set -e
           echo "Creating deployment zip with everything..."
           zip -r release.zip . -x "*.git*" "node_modules/.cache/*" ".github/*"
-
-          # Verify the zip was created
           if [ ! -f "release.zip" ]; then
             echo "ERROR: release.zip was not created"
             exit 1
           fi
-
           echo "✅ Deployment package created successfully"
           ls -lh release.zip
 
-      # Upload build artifacts for test job - for both PR and release
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -81,7 +76,6 @@ jobs:
           path: |
             dist
 
-      # Upload release zip for deployment job - only for release
       - name: Upload artifact for deployment
         if: github.event_name == 'push'
         uses: actions/upload-artifact@v4
@@ -111,7 +105,6 @@ jobs:
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
 
-      # Download build artifacts from build job
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -123,20 +116,25 @@ jobs:
   # This job only runs on push events to main branch (release)
   deploy:
     name: Deploy
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', inputs.base-branch)
     needs: test
     runs-on: ubuntu-latest
     environment:
       name: "Production"
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    # The permissions in this job are more restrictive, but we'll use the top-level
+    # permissions to make the `changesets` step work. You can also specify them
+    # per-job, but for a simple case, top-level is fine.
+    # Note: I've added a check for the base branch dynamically
     permissions:
-      id-token: write # Required for requesting the JWT
-      contents: read # Required for actions/checkout
+      id-token: write
+      contents: write # Need this for the `changesets` action
+      pull-requests: write # Need this for the `changesets` action
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Azure deployment
       - name: Download artifact for deployment
         uses: actions/download-artifact@v4
         with:
@@ -148,7 +146,7 @@ jobs:
           ls -lh release.zip
           echo ""
           echo "=== ZIP CONTENTS ==="
-          unzip -l release.zip | head -20 # commenting this to avoid excessive output
+          unzip -l release.zip | head -20
           echo ""
           echo "=== EXTRACTING ZIP ==="
           unzip -o release.zip
@@ -167,48 +165,32 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           set -e
-
-          # ===== INSTALL DEPENDENCIES =====
           echo "Installing rsync..."
           sudo apt-get update -q
           sudo apt-get install -y -q rsync
           rsync --version
-
-          # ===== SETUP SSH AUTHENTICATION =====
           echo "Setting up SSH key for Akamai NetStorage..."
           SSH_KEY_PATH="$HOME/key.pem"
           printf "%s\n" "$AKAMAI_NS_SSH_PRIVATE_KEY" > "$SSH_KEY_PATH"
-          chmod 600 "$SSH_KEY_PATH"  # Secure the SSH key file
-
-          # ===== DEFINE PATHS AND DIRECTORIES =====
+          chmod 600 "$SSH_KEY_PATH"
           local_source_dir="${{ github.workspace }}/dist/public"
           staging_dir="staging_for_rsync"
           relative_path_to_create="${AKAMAI_ENV_PATH}/shell/${{ github.run_id }}"
           full_staging_path="$staging_dir/$relative_path_to_create"
-
           echo "Source directory: $local_source_dir"
           echo "Target path: $relative_path_to_create"
-
-          # ===== PREPARE STAGING DIRECTORY =====
           echo "Creating staging directory structure..."
           mkdir -p "$full_staging_path"
           cp -a "$local_source_dir/." "$full_staging_path/"
-
-          # ===== UPLOAD TO AKAMAI NETSTORAGE =====
           echo "Uploading files to Akamai NetStorage..."
           REMOTE_HOST="sshacs@1fe.rsync.upload.akamai.com"
           SSH_OPTS="-o StrictHostKeyChecking=no -oBatchMode=yes -i $SSH_KEY_PATH"
-
           cd "$staging_dir"
-          # rsync flags: -a (archive), -v (verbose), -R (relative paths), -O (omit dir times)
           rsync -avvRO -e "ssh $SSH_OPTS" "${AKAMAI_ENV_PATH}/" "$REMOTE_HOST:"
-
-          # ===== CLEANUP =====
           echo "Cleaning up temporary files..."
-          cd ../ # Go back to original directory
+          cd ../
           rm -rf "$staging_dir"
           shred -u "$SSH_KEY_PATH" || rm -f "$SSH_KEY_PATH"
-
           echo "Upload to Akamai NetStorage completed successfully!"
 
       - name: Login to Azure
@@ -218,14 +200,12 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
-      - name: Set BUILD_NUMBER environment variable in Azure App Settings so that it can be used in the app
+      - name: Set BUILD_NUMBER environment variable in Azure App Settings
         run: |
           az webapp config appsettings set \
             --name '1fe-demo' \
             --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
             --settings BUILD_NUMBER=${{ github.run_id }}
-
-          # Verify the setting was applied
           echo "Verifying BUILD_NUMBER was set..."
           az webapp config appsettings list \
             --name '1fe-demo' \
@@ -243,10 +223,11 @@ jobs:
 
       - name: Publish shell types to npm
         id: changesets
+        # This step is the one that needs the `contents: write` and `pull-requests: write` permissions
+        # and it also needs the NPM_TOKEN secret from the caller workflow.
         uses: changesets/action@v1
         with:
-          # Changesets handles publishing with the publishConfig from each package.json
           publish: yarn changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }} # This is the new part
