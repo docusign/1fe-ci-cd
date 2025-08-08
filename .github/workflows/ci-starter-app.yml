@@ -63,7 +63,7 @@ jobs:
 
       # Create zip file for Azure deployment (only for release)
       - name: Zip artifact for deployment
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -e  # Exit immediately if any command fails
@@ -90,7 +90,7 @@ jobs:
 
       # Upload release zip for deployment job - only for release
       - name: Upload artifact for deployment
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: node-app
