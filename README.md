@@ -65,3 +65,9 @@ jobs:
     secrets:
       AZURE_APP_CONFIG_CONNECTION_STRING: ...
 
+
+---
+
+### Issues and Discussions
+
+If you have questions or want to discuss this project, please visit the [Issues](https://github.com/docusign/1fe/issues) or [Discussions](https://github.com/docusign/1fe/discussions) pages in our monorepo.
