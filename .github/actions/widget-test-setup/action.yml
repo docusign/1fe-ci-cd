@@ -23,14 +23,6 @@ runs:
         node-version: ${{ inputs.node-version }}
         cache: yarn
 
-    - name: Authenticate to npm
-      if: ${{ inputs.npm-token-readonly != '' }}
-      shell: bash
-      run: |
-        echo "//registry.npmjs.org/:_authToken=${{ inputs.npm-token-readonly }}" > ${{ env.NPM_CONFIG_USERCONFIG }}
-        yarn config set npmRegistryServer https://registry.npmjs.org
-        yarn config set npmAuthToken ${{ inputs.npm-token-readonly }}
-
     - name: Install dependencies
       shell: bash
       run: yarn install --frozen-lockfile

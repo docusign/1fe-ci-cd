@@ -26,8 +26,6 @@ on:
         required: true
       AZURE_RESOURCE_GROUP:
         required: true
-      NPM_TOKEN_READONLY:
-        required: true
       NPM_TOKEN:
         required: false
 
@@ -53,8 +51,6 @@ jobs:
 
       - name: Setup environment
         uses: ./.github/actions/common-ci/setup
-        with:
-          npm_token_readonly: ${{ secrets.NPM_TOKEN_READONLY }}
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
 
@@ -113,8 +109,6 @@ jobs:
 
       - name: Setup environment
         uses: ./.github/actions/common-ci/setup
-        with:
-          npm_token_readonly: ${{ secrets.NPM_TOKEN_READONLY }}
         env:
           NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
 
@@ -130,7 +124,7 @@ jobs:
   # This job only runs on push events to main branch (release)
   deploy:
     name: Deploy
-    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'    
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     environment:
@@ -138,7 +132,7 @@ jobs:
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
       id-token: write
-      contents: write 
+      contents: write
       pull-requests: write
 
     steps:
@@ -250,7 +244,7 @@ jobs:
           package: ./
           startup-command: "yarn run start"
 
-      - name: Authenticate to npm
+      - name: Authenticate to npm to publish
         shell: bash
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ${{ env.NPM_CONFIG_USERCONFIG }}
