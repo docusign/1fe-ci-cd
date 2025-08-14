@@ -9,6 +9,9 @@ inputs:
     description: "The base branch to commit/tag back to"
     required: false
     default: "main"
+  github-token:
+    description: "GitHub token for authentication"
+    required: true
 outputs: # Outputs from this composite action
   widgetId:
     description: "The ID of the built widget"
