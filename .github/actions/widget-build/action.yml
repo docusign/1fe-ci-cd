@@ -9,9 +9,6 @@ inputs:
     description: "The base branch to commit/tag back to"
     required: false
     default: "main"
-  github-token:
-    description: "GitHub token for authentication"
-    required: true
 outputs: # Outputs from this composite action
   widgetId:
     description: "The ID of the built widget"
@@ -77,7 +74,7 @@ runs:
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       run: |
-        git remote set-url origin https://x-access-token:${{ inputs.github-token }}@github.com/${{ github.repository }}
+        git remote set-url origin https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}
 
     - name: Prepare Commit Message and Tag
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
