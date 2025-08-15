@@ -29,3 +29,4 @@ runs:
           --content-type application/json \
           --yes \
           --connection-string "${{ inputs.AZURE_APP_CONFIG_CONNECTION_STRING }}"
+          --label "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" # this helps track which run set this value
