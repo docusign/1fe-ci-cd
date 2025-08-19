@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           base-branch: ${{ inputs.base-branch }}
-          app-id: ${{ vars.FE_ADMIN_APP_ID }}
+          app-id: "1234567890" # Replace with your actual 1fe-admin GitHub App ID
           private-key: ${{ secrets.FE_ADMIN_PRIVATE_KEY }}
 
   upload-integration:

@@ -8,13 +8,13 @@ The `1fe-admin` GitHub App is used to authenticate automated commits and cross-r
 
 ## Required Configuration
 
-### 1. Repository Variables
+### 1. Update Workflow File
 
-Set the following repository variable in your GitHub repository settings:
+Update the GitHub App ID directly in the workflow file:
 
-- **Name**: `FE_ADMIN_APP_ID`  
-- **Value**: The App ID of your `1fe-admin` GitHub App
-- **Location**: Repository → Settings → Secrets and Variables → Actions → Variables tab
+- **File**: `.github/workflows/ci-widgets.yml`
+- **Line**: Replace `"1234567890"` with your actual `1fe-admin` GitHub App ID
+- **Example**: `app-id: "987654321"`
 
 ### 2. Repository Secrets  
 
@@ -56,7 +56,7 @@ Your `1fe-admin` GitHub App should have the following permissions:
 
 ### Common Issues:
 
-1. **"Invalid app-id" error**: Verify `FE_ADMIN_APP_ID` is set correctly
+1. **"Invalid app-id" error**: Verify the app ID is correct in the workflow file
 2. **"Invalid private key" error**: Ensure `FE_ADMIN_PRIVATE_KEY` includes the full key with headers
 3. **"Installation not found" error**: Verify the app is installed on the target repository
 4. **Permission denied**: Check the app has required permissions (Contents: Write)
