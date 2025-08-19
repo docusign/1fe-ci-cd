@@ -28,5 +28,5 @@ runs:
           --value "$(jq -n --arg wid '${{ inputs.widgetId }}' --arg ver '${{ inputs.nextVersion }}' '{widgetId: $wid, version: $ver}')" \
           --content-type application/json \
           --yes \
-          --connection-string "${{ inputs.AZURE_APP_CONFIG_CONNECTION_STRING }}"
+          --connection-string "${{ inputs.AZURE_APP_CONFIG_CONNECTION_STRING }}" \
           --label "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" # this helps track which run set this value
