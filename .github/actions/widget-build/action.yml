@@ -116,7 +116,7 @@ runs:
       shell: bash
       run: |
         git add package.json
-        git commit --amend --no-verify -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
+        git commit --amend --no-verify --author="${{ steps.generate-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.generate-token.outputs.app-slug }}[bot]@users.noreply.github.com>" -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
 
     - name: Fetch and Force Push to Remote for non-PR runs
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
