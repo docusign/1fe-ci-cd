@@ -1,61 +1,48 @@
-name: "Widget Build and Versioning"
-description: "Builds the widget, calculates version, and archives artifact."
+name: 'Widget Build and Versioning'
+description: 'Builds the widget, calculates version, and archives artifact.'
 inputs:
   node-version:
-    description: "Node.js version to use"
+    description: 'Node.js version to use'
     required: false
-    default: "22"
+    default: '22'
   base-branch:
-    description: "The base branch to commit/tag back to"
+    description: 'The base branch to commit/tag back to'
     required: false
-    default: "main"
+    default: 'main'
   app-id:
-    description: "GitHub App ID for authentication"
+    description: 'GitHub App ID for authentication'
     required: true
   private-key:
-    description: "GitHub App private key for authentication"
+    description: 'GitHub App private key for authentication'
     required: true
 outputs: # Outputs from this composite action
   widgetId:
-    description: "The ID of the built widget"
+    description: 'The ID of the built widget'
     value: ${{ steps.set_vars.outputs.widgetId }}
   nextVersion:
-    description: "The calculated next version of the widget"
+    description: 'The calculated next version of the widget'
     value: ${{ steps.set_vars.outputs.nextVersion }}
 
 runs:
-  using: "composite" # <--- IMPORTANT: This defines it as a composite action
+  using: 'composite' # <--- IMPORTANT: This defines it as a composite action
   steps:
     - name: Checkout Caller's Code
       uses: actions/checkout@v4
       with:
         fetch-depth: 0 # Required for amending and tagging (if needed by subsequent composite actions like git-ops)
-    
+
     - name: Generate GitHub App Token
       id: generate-token
       uses: actions/create-github-app-token@v2
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
-    
-    - name: Get GitHub App User ID
-      id: get-user-id
-      shell: bash
-      run: echo "user-id=$(gh api "/users/${{ steps.generate-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
-      env:
-        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-    
-    - name: Configure Git User (GitHub App Bot)
-      shell: bash
-      run: |
-        git config --global user.name '${{ steps.generate-token.outputs.app-slug }}[bot]'
-        git config --global user.email '${{ steps.get-user-id.outputs.user-id }}+${{ steps.generate-token.outputs.app-slug }}[bot]@users.noreply.github.com'
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: "yarn"
+        cache: 'yarn'
 
     - name: Install Dependencies
       shell: bash
@@ -91,49 +78,82 @@ runs:
         name: widget-build
         path: ./dist
 
-    - name: Set Git Remote URL with GitHub App Token
-      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
-      shell: bash
-      run: |
-        git remote set-url origin https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/${{ github.repository }}
-
     - name: Prepare Commit Message and Tag
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       env:
         VERSION: ${{ steps.set_vars.outputs.nextVersion }}
         WIDGET_NAME: ${{ steps.set_vars.outputs.widgetId }}
-        INTEGRATION_CDN_URL: "https://1fe-a.akamaihd.net/integration/widgets"
-        PREVIEW_URL: "https://demo.1fe.com/bathtub"
+        INTEGRATION_CDN_URL: 'https://1fe-a.akamaihd.net/integration/widgets'
+        PREVIEW_URL: 'https://demo.1fe.com/bathtub'
       run: |
         BUNDLE_URL="${INTEGRATION_CDN_URL}/${WIDGET_NAME}/${VERSION}/js/1fe-bundle.js"
         COMMIT_MSG="Bundle will be uploaded to: ${BUNDLE_URL} / Preview here: ${PREVIEW_URL}?widgetUrl=${BUNDLE_URL}&fixPreview=true [skip ci]"
         echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
         echo "TAG_VERSION=${VERSION}" >> $GITHUB_ENV
 
-    - name: Stage package.json and Commit for non-PR runs
-      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
-      shell: bash
-      run: |
-        git add package.json
-        git commit --amend --no-verify --author="${{ steps.generate-token.outputs.app-slug }}[bot] <${{ steps.get-user-id.outputs.user-id }}+${{ steps.generate-token.outputs.app-slug }}[bot]@users.noreply.github.com>" -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
-
-    - name: Fetch and Force Push to Remote for non-PR runs
+    - name: Update package.json and commit via GitHub API
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       run: |
         set -euo pipefail
-        git fetch origin ${{ inputs.base-branch }}
-        git reset --hard HEAD
-        git push origin HEAD:${{ inputs.base-branch }} --force-with-lease --no-verify
 
-    - name: Create and Push Tag
+        # Read the updated package.json content
+        PACKAGE_CONTENT=$(cat package.json)
+
+        # Base64 encode the content
+        ENCODED_CONTENT=$(echo "$PACKAGE_CONTENT" | base64 -i -)
+
+        # Get the current SHA of package.json
+        CURRENT_SHA=$(gh api repos/${{ github.repository }}/contents/package.json \
+          -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
+          --jq .sha)
+
+        # Update package.json via GitHub API (this creates a commit on behalf of the GitHub App)
+        gh api repos/${{ github.repository }}/contents/package.json \
+          -X PUT \
+          -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
+          -f message="${{ env.COMMIT_MSG }}" \
+          -f content="$ENCODED_CONTENT" \
+          -f sha="$CURRENT_SHA" \
+          -f branch="${{ inputs.base-branch }}"
+      env:
+        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+    - name: Create Git Tag via GitHub API
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
       run: |
-        if git tag -a "${{ env.TAG_VERSION }}" -m "Release: ${{ env.TAG_VERSION }}" 2>/dev/null; then
-          echo "Tag created"
-          git push origin "${{ env.TAG_VERSION }}" --force
+        set -euo pipefail
+
+        # Get the latest commit SHA from the branch after our update
+        LATEST_SHA=$(gh api repos/${{ github.repository }}/branches/${{ inputs.base-branch }} \
+          -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
+          --jq .commit.sha)
+
+        echo "Creating tag ${{ env.TAG_VERSION }} for commit $LATEST_SHA"
+
+        # Create tag object via GitHub API
+        TAG_RESPONSE=$(gh api repos/${{ github.repository }}/git/tags \
+          -X POST \
+          -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
+          -f tag="${{ env.TAG_VERSION }}" \
+          -f message="Release: ${{ env.TAG_VERSION }}" \
+          -f object="$LATEST_SHA" \
+          -f type="commit" 2>/dev/null || echo "{}")
+
+        TAG_SHA=$(echo "$TAG_RESPONSE" | jq -r '.sha // empty')
+
+        if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "null" ]; then
+          # Create the reference for the tag
+          gh api repos/${{ github.repository }}/git/refs \
+            -X POST \
+            -H "Authorization: token ${{ steps.generate-token.outputs.token }}" \
+            -f ref="refs/tags/${{ env.TAG_VERSION }}" \
+            -f sha="$TAG_SHA" || echo "Tag reference may already exist"
+          echo "Tag ${{ env.TAG_VERSION }} created successfully"
         else
-          echo "Tag ${{ env.TAG_VERSION }} already exists. Skipping tag push..."
+          echo "Tag ${{ env.TAG_VERSION }} may already exist or creation failed. Skipping..."
         fi
+      env:
+        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
