@@ -37,6 +37,19 @@ runs:
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
+    
+    - name: Test GitHub App Token
+      env:
+        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+      shell: bash
+      run: |
+        gh api octocat
+    
+    - name: Configure Git User (Simple)
+      shell: bash
+      run: |
+        git config --global user.name "1fe-admin"
+        git config --global user.email "1fe-admin@docusign.com"
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
