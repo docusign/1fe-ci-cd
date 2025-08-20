@@ -38,13 +38,6 @@ runs:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
     
-    - name: Test GitHub App Token
-      env:
-        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-      shell: bash
-      run: |
-        gh api octocat
-    
     - name: Configure Git User (Simple)
       shell: bash
       run: |
