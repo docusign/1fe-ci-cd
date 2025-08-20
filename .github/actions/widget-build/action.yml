@@ -91,12 +91,6 @@ runs:
         name: widget-build
         path: ./dist
 
-    - name: Set Git Remote URL with GitHub App Token
-      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
-      shell: bash
-      run: |
-        git remote set-url origin https://x-access-token:${{ steps.generate-token.outputs.token }}@github.com/${{ github.repository }}
-
     - name: Prepare Commit Message and Tag
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
       shell: bash
@@ -111,29 +105,45 @@ runs:
         echo "COMMIT_MSG=${COMMIT_MSG}" >> $GITHUB_ENV
         echo "TAG_VERSION=${VERSION}" >> $GITHUB_ENV
 
-    - name: Stage package.json and Commit for non-PR runs
+    - name: Update package.json and Commit via GitHub API
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
+      env:
+        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
       shell: bash
       run: |
-        git add package.json
-        git commit --amend --no-verify -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
+        # Get current package.json content and encode it
+        PACKAGE_CONTENT=$(cat package.json | base64 -w 0)
+        
+        # Get current file SHA for update
+        CURRENT_SHA=$(gh api repos/${{ github.repository }}/contents/package.json --jq .sha)
+        
+        # Update package.json via GitHub API
+        gh api repos/${{ github.repository }}/contents/package.json \
+          --method PUT \
+          --field message="${{ env.COMMIT_MSG }}" \
+          --field content="$PACKAGE_CONTENT" \
+          --field sha="$CURRENT_SHA" \
+          --field branch="${{ inputs.base-branch }}"
 
-    - name: Fetch and Force Push to Remote for non-PR runs
+    - name: Create and Push Tag via GitHub API
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
+      env:
+        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
       shell: bash
       run: |
-        set -euo pipefail
-        git fetch origin ${{ inputs.base-branch }}
-        git reset --hard HEAD
-        git push origin HEAD:${{ inputs.base-branch }} --force-with-lease --no-verify
-
-    - name: Create and Push Tag
-      if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
-      shell: bash
-      run: |
-        if git tag -a "${{ env.TAG_VERSION }}" -m "Release: ${{ env.TAG_VERSION }}" 2>/dev/null; then
-          echo "Tag created"
-          git push origin "${{ env.TAG_VERSION }}" --force
-        else
-          echo "Tag ${{ env.TAG_VERSION }} already exists. Skipping tag push..."
-        fi
+        # Get current commit SHA
+        COMMIT_SHA=$(gh api repos/${{ github.repository }}/git/refs/heads/${{ inputs.base-branch }} --jq .object.sha)
+        
+        # Create tag via GitHub API
+        gh api repos/${{ github.repository }}/git/tags \
+          --method POST \
+          --field tag="${{ env.TAG_VERSION }}" \
+          --field message="Release: ${{ env.TAG_VERSION }}" \
+          --field object="$COMMIT_SHA" \
+          --field type="commit" || echo "Tag creation failed or already exists"
+        
+        # Create tag reference via GitHub API
+        gh api repos/${{ github.repository }}/git/refs \
+          --method POST \
+          --field ref="refs/tags/${{ env.TAG_VERSION }}" \
+          --field sha="$COMMIT_SHA" || echo "Tag reference creation failed or already exists"
