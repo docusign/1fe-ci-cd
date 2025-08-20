@@ -38,13 +38,6 @@ runs:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
     
-    - name: Get GitHub App User ID
-      id: get-user-id
-      shell: bash
-      run: echo "user-id=$(gh api "/users/${{ steps.generate-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
-      env:
-        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
-    
     - name: Configure Git User (GitHub App)
       shell: bash
       run: |
