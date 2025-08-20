@@ -38,7 +38,7 @@ runs:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
     
-    - name: Configure Git User (Simple)
+    - name: Configure Git User
       shell: bash
       run: |
         git config --global user.name "1fe-admin"
