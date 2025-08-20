@@ -37,12 +37,6 @@ runs:
       with:
         app-id: ${{ inputs.app-id }}
         private-key: ${{ inputs.private-key }}
-    
-    - name: Configure Git User (GitHub App)
-      shell: bash
-      run: |
-        git config --global user.name '${{ steps.generate-token.outputs.app-slug }}'
-        git config --global user.email '${{ steps.generate-token.outputs.app-slug }}@users.noreply.github.com'
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -109,7 +103,7 @@ runs:
       shell: bash
       run: |
         git add package.json
-        git commit --amend --no-verify --author="${{ steps.generate-token.outputs.app-slug }} <${{ steps.generate-token.outputs.app-slug }}@users.noreply.github.com>" -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
+        git commit --amend --no-verify -m "${{ env.COMMIT_MSG }}" || echo "Nothing to amend"
 
     - name: Fetch and Force Push to Remote for non-PR runs
       if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', inputs.base-branch)
