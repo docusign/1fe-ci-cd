@@ -35,7 +35,7 @@ jobs:
     steps:
       - name: Call Widget Build Composite Action
         id: call_build_composite
-        uses: docusign/1fe-ci-cd/.github/actions/widget-build@main
+        uses: docusign/1fe-ci-cd/.github/actions/widget-build@fix/commit-author-bypass
         with:
           node-version: ${{ inputs.node-version }}
           base-branch: ${{ inputs.base-branch }}
