@@ -42,13 +42,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Run version bump only on push to main (release)
-      # - name: Bump version and push tag
-      #   if: github.event_name == 'push'
-      #   uses: phips28/gh-action-bump-version@v11.0.7
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Setup environment
         uses: ./.github/actions/common-ci/setup
         env:
@@ -244,13 +237,18 @@ jobs:
           package: ./
           startup-command: "yarn run start"
 
-      - name: Authenticate to npm to publish
-        shell: bash
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ${{ env.NPM_CONFIG_USERCONFIG }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
+      - name: Setup Node.js for OIDC Publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: "yarn"
+
+      - name: Ensure OIDC trusted publishing has latest npm
+        run: npm install -g npm@latest
+      
+      - name: Install dependencies for publish
+        run: yarn install
 
       - name: Publish shell types to npm
         id: changesets
@@ -259,4 +257,3 @@ jobs:
           publish: yarn changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
