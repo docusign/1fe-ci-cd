@@ -21,12 +21,18 @@ runs:
   steps:
     - name: Set configuration value
       shell: bash
+      env:
+        WIDGET_ID: ${{ inputs.widgetId }}
+        NEXT_VERSION: ${{ inputs.nextVersion }}
+        ENVIRONMENT: ${{ inputs.environment }}
+        AZURE_APP_CONFIG_CONNECTION_STRING: ${{ inputs.AZURE_APP_CONFIG_CONNECTION_STRING }}
+        GH_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
-        echo "Setting AppConfig key: ${{ inputs.environment }}:${{ inputs.widgetId }}"
+        echo "Setting AppConfig key: ${ENVIRONMENT}:${WIDGET_ID}"
         az appconfig kv set \
-          --key "${{ inputs.environment }}:${{ inputs.widgetId }}" \
-          --value "$(jq -n --arg wid '${{ inputs.widgetId }}' --arg ver '${{ inputs.nextVersion }}' '{widgetId: $wid, version: $ver}')" \
+          --key "${ENVIRONMENT}:${WIDGET_ID}" \
+          --value "$(jq -n --arg wid "$WIDGET_ID" --arg ver "$NEXT_VERSION" '{widgetId: $wid, version: $ver}')" \
           --content-type application/json \
           --yes \
-          --connection-string "${{ inputs.AZURE_APP_CONFIG_CONNECTION_STRING }}" \
-          --label "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" # this helps track which run set this value
+          --connection-string "${AZURE_APP_CONFIG_CONNECTION_STRING}" \
+          --label "${GH_RUN_URL}" # this helps track which run set this value
